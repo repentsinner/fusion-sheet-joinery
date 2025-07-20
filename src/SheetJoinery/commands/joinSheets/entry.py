@@ -494,12 +494,12 @@ def create_join_sheets_feature(design, selected_bodies, selected_faces, tab_widt
         custom_feature_input = custom_features.createInput(custom_feature_definition)
         
         # Add dependencies on the selected bodies
-        for body in selected_bodies:
-            custom_feature_input.addDependency(body)
+        for i, body in enumerate(selected_bodies):
+            custom_feature_input.addDependency(f"body_{i}", body)
             
         # Add dependencies on selected faces if any
-        for face in selected_faces:
-            custom_feature_input.addDependency(face)
+        for i, face in enumerate(selected_faces):
+            custom_feature_input.addDependency(f"face_{i}", face)
         
         custom_feature = custom_features.add(custom_feature_input)
 
@@ -646,15 +646,20 @@ def compute_join_sheets_feature(args):
             args.isComputed = True  # Don't fail, just warn
             return
 
-        # Collect the dependent bodies 
+        # Collect the dependent bodies and faces by parameter name
         bodies = []
         faces = []
         
         for i in range(dependencies.count):
-            entity = dependencies.item(i).entity
-            if hasattr(entity, 'bodyType'):  # It's a body
+            dependency = dependencies.item(i)
+            param_name = dependency.parameter
+            entity = dependency.entity
+            
+            futil.log(f"Processing dependency: {param_name}")
+            
+            if param_name.startswith("body_"):
                 bodies.append(entity)
-            elif hasattr(entity, 'surfaceType'):  # It's a face
+            elif param_name.startswith("face_"):
                 faces.append(entity)
 
         futil.log(f"Found {len(bodies)} bodies and {len(faces)} faces in dependencies")
