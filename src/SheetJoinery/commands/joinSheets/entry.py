@@ -39,35 +39,6 @@ ICON_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resource
 local_handlers = []
 
 
-# Custom selection event handler to filter for sheet metal bodies only
-class SheetMetalSelectionHandler(adsk.core.SelectionEventHandler):
-    def __init__(self):
-        super().__init__()
-    
-    def notify(self, args):
-        try:
-            eventArgs = adsk.core.SelectionEventArgs.cast(args)
-            selection = eventArgs.selection
-            entity = selection.entity
-            
-            # Check if it's a BRepBody
-            if entity.objectType == adsk.fusion.BRepBody.classType():
-                body = adsk.fusion.BRepBody.cast(entity)
-                
-                # Only allow sheet metal bodies
-                if not body.isSheetMetal:
-                    eventArgs.isSelectable = False
-                    futil.log(f"Rejected non-sheet-metal body: {body.name if hasattr(body, 'name') else 'unnamed'}")
-                    return
-            else:
-                # Reject non-body selections
-                eventArgs.isSelectable = False
-                futil.log("Rejected non-body selection")
-                return
-                
-        except Exception as e:
-            futil.log(f"Error in sheet metal selection handler: {e!s}")
-            eventArgs.isSelectable = False
 
 # Global custom feature definition - created once when add-in loads
 custom_feature_definition = None
@@ -203,9 +174,33 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     )
     
     # Add custom selection handler to filter for sheet metal bodies only
-    sheet_metal_handler = SheetMetalSelectionHandler()
+    def sheet_metal_selection_handler(args):
+        try:
+            eventArgs = adsk.core.SelectionEventArgs.cast(args)
+            selection = eventArgs.selection
+            entity = selection.entity
+            
+            # Check if it's a BRepBody
+            if entity.objectType == adsk.fusion.BRepBody.classType():
+                body = adsk.fusion.BRepBody.cast(entity)
+                
+                # Only allow sheet metal bodies
+                if not body.isSheetMetal:
+                    eventArgs.isSelectable = False
+                    futil.log(f"Rejected non-sheet-metal body: {body.name if hasattr(body, 'name') else 'unnamed'}")
+                    return
+            else:
+                # Reject non-body selections
+                eventArgs.isSelectable = False
+                futil.log("Rejected non-body selection")
+                return
+                
+        except Exception as e:
+            futil.log(f"Error in sheet metal selection handler: {e!s}")
+            eventArgs.isSelectable = False
+
     futil.add_handler(
-        args.command.selectionEvent, sheet_metal_handler, local_handlers=local_handlers
+        args.command.selectionEvent, sheet_metal_selection_handler, local_handlers=local_handlers
     )
 
 
