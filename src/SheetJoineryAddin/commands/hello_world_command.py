@@ -23,6 +23,7 @@ class HelloWorldCommand:
         self._command_id = 'SheetJoineryHelloWorld'
         self._command_name = 'Hello World Custom Feature'
         self._command_tooltip = 'Creates a simple custom feature demonstration'
+        self._handlers = []  # Keep handlers in scope
         
     def on_create(self):
         """Create the command definition and add it to the UI"""
@@ -46,8 +47,10 @@ class HelloWorldCommand:
                 self._command_tooltip
             )
             
-            # Connect to command events
-            cmd_def.commandCreated.add(self._on_command_created)
+            # Create and connect command created handler
+            command_created_handler = CommandCreatedHandler(self)
+            cmd_def.commandCreated.add(command_created_handler)
+            self._handlers.append(command_created_handler)
             
             # Add the command to the CREATE panel
             create_panel.controls.addCommand(cmd_def)
@@ -55,7 +58,7 @@ class HelloWorldCommand:
         except:
             self._ui.messageBox('Failed to create Hello World command:\n{}'.format(traceback.format_exc()))
     
-    def _on_command_created(self, args):
+    def on_command_created(self, args):
         """Called when the command is created"""
         try:
             cmd = args.command
@@ -66,15 +69,22 @@ class HelloWorldCommand:
             inputs.addStringValueInput('message', 'Message', 'Hello from Sheet Joinery!')
             inputs.addBoolValueInput('create_sketch', 'Create Demo Sketch', True, '', True)
             
-            # Connect to command events
-            cmd.execute.add(self._on_execute)
-            cmd.executePreview.add(self._on_execute_preview)
-            cmd.validateInputs.add(self._on_validate_inputs)
+            # Create and connect command event handlers
+            execute_handler = CommandExecuteHandler(self)
+            execute_preview_handler = CommandExecutePreviewHandler(self)
+            validate_inputs_handler = CommandValidateInputsHandler(self)
+            
+            cmd.execute.add(execute_handler)
+            cmd.executePreview.add(execute_preview_handler)
+            cmd.validateInputs.add(validate_inputs_handler)
+            
+            # Keep handlers in scope
+            self._handlers.extend([execute_handler, execute_preview_handler, validate_inputs_handler])
             
         except:
             self._ui.messageBox('Failed to setup command:\n{}'.format(traceback.format_exc()))
     
-    def _on_validate_inputs(self, args):
+    def on_validate_inputs(self, args):
         """Validate command inputs"""
         try:
             inputs = args.command.commandInputs
@@ -90,12 +100,12 @@ class HelloWorldCommand:
         except:
             args.areInputsValid = False
     
-    def _on_execute_preview(self, args):
+    def on_execute_preview(self, args):
         """Preview the command execution"""
         # For this demo, we don't need preview functionality
         pass
     
-    def _on_execute(self, args):
+    def on_execute(self, args):
         """Execute the command"""
         try:
             inputs = args.command.commandInputs
@@ -153,8 +163,10 @@ class HelloWorldCommand:
             custom_feature_input = custom_features.createInput(custom_feature_def)
             custom_feature = custom_features.add(custom_feature_input)
             
-            # Connect to custom feature events for compute functionality
-            custom_feature.customFeatureCompute.add(self._on_custom_feature_compute)
+            # Create and connect custom feature compute handler
+            compute_handler = CustomFeatureComputeHandler(self)
+            custom_feature.customFeatureCompute.add(compute_handler)
+            self._handlers.append(compute_handler)
             
             # Show success message
             self._ui.messageBox(f'Created custom feature: {name}\nMessage: {message}\nPython Version: {sys.version_info.major}.{sys.version_info.minor}')
@@ -191,7 +203,7 @@ class HelloWorldCommand:
             self._ui.messageBox('Failed to create demo sketch:\n{}'.format(traceback.format_exc()))
             return None
     
-    def _on_custom_feature_compute(self, args):
+    def on_custom_feature_compute(self, args):
         """Handle custom feature compute events"""
         try:
             # This is where we would implement the actual joint generation logic
@@ -216,3 +228,59 @@ class HelloWorldCommand:
             # Mark compute as failed
             args.isComputed = False
             args.computeStatus = f'Compute failed: {traceback.format_exc()}'
+
+
+# Event Handler Classes
+class CommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
+    """Handler for command created events"""
+    
+    def __init__(self, command):
+        super().__init__()
+        self._command = command
+    
+    def notify(self, args):
+        self._command.on_command_created(args)
+
+
+class CommandExecuteHandler(adsk.core.CommandEventHandler):
+    """Handler for command execute events"""
+    
+    def __init__(self, command):
+        super().__init__()
+        self._command = command
+    
+    def notify(self, args):
+        self._command.on_execute(args)
+
+
+class CommandExecutePreviewHandler(adsk.core.CommandEventHandler):
+    """Handler for command execute preview events"""
+    
+    def __init__(self, command):
+        super().__init__()
+        self._command = command
+    
+    def notify(self, args):
+        self._command.on_execute_preview(args)
+
+
+class CommandValidateInputsHandler(adsk.core.ValidateInputsEventHandler):
+    """Handler for validate inputs events"""
+    
+    def __init__(self, command):
+        super().__init__()
+        self._command = command
+    
+    def notify(self, args):
+        self._command.on_validate_inputs(args)
+
+
+class CustomFeatureComputeHandler(adsk.fusion.CustomFeatureEventHandler):
+    """Handler for custom feature compute events"""
+    
+    def __init__(self, command):
+        super().__init__()
+        self._command = command
+    
+    def notify(self, args):
+        self._command.on_custom_feature_compute(args)
