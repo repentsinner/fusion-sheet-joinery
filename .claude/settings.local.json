@@ -16,7 +16,8 @@
       "Bash(echo:*)",
       "Bash(rm:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }

@@ -30,11 +30,17 @@ ICON_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'resource
 # they are not released and garbage collected.
 local_handlers = []
 
+# Global custom feature definition - created once when add-in loads
+custom_feature_definition = None
+
 
 # Executed when add-in is run.
 def start():
     try:
         futil.log(f'Starting {CMD_NAME}...')
+        
+        # Create the custom feature definition first (as recommended by Autodesk)
+        create_custom_feature_definition()
         
         # Create a command Definition.
         cmd_def = ui.commandDefinitions.addButtonDefinition(CMD_ID, CMD_NAME, CMD_Description, ICON_FOLDER)
@@ -193,33 +199,56 @@ def command_destroy(args: adsk.core.CommandEventArgs):
     local_handlers = []
 
 
-def create_join_sheets_feature(design, description_text, tolerance_value):
-    """Create a Join Sheets custom feature in the timeline"""
+def create_custom_feature_definition():
+    """Create the CustomFeatureDefinition when add-in loads (best practice)"""
+    global custom_feature_definition
     try:
+        # Use company name in ID as recommended
+        feature_id = f'{config.COMPANY_NAME}.JoinSheets'
+        default_name = 'Join Sheets'
+        icon_folder = ICON_FOLDER
+        
+        custom_feature_definition = adsk.fusion.CustomFeatureDefinition.create(feature_id, default_name, icon_folder)
+        
+        # Add all available event handlers to log what events are available
+        futil.add_handler(custom_feature_definition.customFeatureCompute, compute_join_sheets_feature, local_handlers=local_handlers)
+        
+        # Try to add handlers for other potential events (with error handling)
+        try_add_event_handler(custom_feature_definition, 'customFeatureEdit', edit_join_sheets_feature)
+        try_add_event_handler(custom_feature_definition, 'customFeatureActivate', activate_join_sheets_feature)
+        try_add_event_handler(custom_feature_definition, 'customFeatureDeactivate', deactivate_join_sheets_feature)
+        try_add_event_handler(custom_feature_definition, 'customFeatureRollback', rollback_join_sheets_feature)
+        
+        # Log all available attributes/methods on the definition object
+        log_object_info(custom_feature_definition, "CustomFeatureDefinition")
+        
+        futil.log(f'Created CustomFeatureDefinition: {feature_id}')
+        
+    except Exception as e:
+        futil.log(f'Error creating CustomFeatureDefinition: {str(e)}')
+        raise
+
+
+def create_join_sheets_feature(design, description_text, tolerance_value):
+    """Create a Join Sheets custom feature instance in the timeline"""
+    try:
+        if not custom_feature_definition:
+            raise Exception("CustomFeatureDefinition not initialized")
+            
         # Get the root component
         root_comp = design.rootComponent
-        
-        # Create a custom feature definition
         custom_features = root_comp.features.customFeatures
         
-        # Create the custom feature definition with required parameters
-        feature_id = 'JoinSheetsFeature'
-        default_name = 'Join Sheets'
-        icon_folder = ICON_FOLDER  # Use the same icon folder as the command
-        
-        custom_feature_def = adsk.fusion.CustomFeatureDefinition.create(feature_id, default_name, icon_folder)
-        
-        # Set additional properties
-        custom_feature_def.description = f'Join Sheets: {description_text} | Tolerance: {tolerance_value}mm'
-        
-        # Add the compute handler to the definition before creating the feature
-        futil.add_handler(custom_feature_def.customFeatureCompute, compute_join_sheets_feature, local_handlers=local_handlers)
-        
-        # Create the custom feature input and add it to the timeline
-        custom_feature_input = custom_features.createInput(custom_feature_def)
+        # Create the custom feature input using the pre-created definition
+        custom_feature_input = custom_features.createInput(custom_feature_definition)
         custom_feature = custom_features.add(custom_feature_input)
         
         futil.log(f'Successfully created Join Sheets custom feature: {custom_feature.name}')
+        futil.log(f'Description: {description_text}, Tolerance: {tolerance_value}mm')
+        
+        # Log info about the created feature instance
+        log_object_info(custom_feature, "Custom Feature Instance")
+        
         return custom_feature
         
     except Exception as e:
@@ -246,3 +275,60 @@ def compute_join_sheets_feature(args):
         futil.log(f'Error computing Join Sheets feature: {str(e)}')
         # Just mark as failed, don't try to set computeStatus
         args.isComputed = False
+
+
+def try_add_event_handler(obj, event_name, handler_func):
+    """Try to add an event handler, logging success or failure"""
+    try:
+        if hasattr(obj, event_name):
+            event = getattr(obj, event_name)
+            futil.add_handler(event, handler_func, local_handlers=local_handlers)
+            futil.log(f'✓ Successfully added handler for: {event_name}')
+        else:
+            futil.log(f'✗ Event not available: {event_name}')
+    except Exception as e:
+        futil.log(f'✗ Error adding handler for {event_name}: {str(e)}')
+
+
+def log_object_info(obj, obj_name):
+    """Log all available attributes and methods on an object"""
+    try:
+        futil.log(f'\n=== {obj_name} Available Attributes/Methods ===')
+        attrs = [attr for attr in dir(obj) if not attr.startswith('_')]
+        for attr in sorted(attrs):
+            try:
+                attr_obj = getattr(obj, attr)
+                attr_type = type(attr_obj).__name__
+                if 'Event' in attr_type:
+                    futil.log(f'  🎯 {attr} ({attr_type}) - EVENT!')
+                elif callable(attr_obj):
+                    futil.log(f'  ⚙️  {attr} ({attr_type})')
+                else:
+                    futil.log(f'  📄 {attr} ({attr_type})')
+            except:
+                futil.log(f'  ❓ {attr} (could not inspect)')
+        futil.log(f'=== End {obj_name} Info ===\n')
+    except Exception as e:
+        futil.log(f'Error logging object info: {str(e)}')
+
+
+# Event handlers for discovery
+def edit_join_sheets_feature(args):
+    """Edit handler"""
+    futil.log(f'🎯 EDIT EVENT: {type(args).__name__}')
+    log_object_info(args, "Edit Event Args")
+
+def activate_join_sheets_feature(args):
+    """Activate handler"""
+    futil.log(f'🎯 ACTIVATE EVENT: {type(args).__name__}')
+    log_object_info(args, "Activate Event Args")
+
+def deactivate_join_sheets_feature(args):
+    """Deactivate handler"""
+    futil.log(f'🎯 DEACTIVATE EVENT: {type(args).__name__}')
+    log_object_info(args, "Deactivate Event Args")
+
+def rollback_join_sheets_feature(args):
+    """Rollback handler"""
+    futil.log(f'🎯 ROLLBACK EVENT: {type(args).__name__}')
+    log_object_info(args, "Rollback Event Args")
