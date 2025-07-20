@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:help.autodesk.com)",
+      "WebFetch(domain:autodeskfusion360.github.io)",
+      "WebFetch(domain:forums.autodesk.com)"
+    ],
+    "deny": []
+  }
+}
