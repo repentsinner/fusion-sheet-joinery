@@ -38,6 +38,37 @@ ICON_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resource
 # they are not released and garbage collected.
 local_handlers = []
 
+
+# Custom selection event handler to filter for sheet metal bodies only
+class SheetMetalSelectionHandler(adsk.core.SelectionEventHandler):
+    def __init__(self):
+        super().__init__()
+    
+    def notify(self, args):
+        try:
+            eventArgs = adsk.core.SelectionEventArgs.cast(args)
+            selection = eventArgs.selection
+            entity = selection.entity
+            
+            # Check if it's a BRepBody
+            if entity.objectType == adsk.fusion.BRepBody.classType():
+                body = adsk.fusion.BRepBody.cast(entity)
+                
+                # Only allow sheet metal bodies
+                if not body.isSheetMetal:
+                    eventArgs.isSelectable = False
+                    futil.log(f"Rejected non-sheet-metal body: {body.name if hasattr(body, 'name') else 'unnamed'}")
+                    return
+            else:
+                # Reject non-body selections
+                eventArgs.isSelectable = False
+                futil.log("Rejected non-body selection")
+                return
+                
+        except Exception as e:
+            futil.log(f"Error in sheet metal selection handler: {e!s}")
+            eventArgs.isSelectable = False
+
 # Global custom feature definition - created once when add-in loads
 custom_feature_definition = None
 
@@ -133,14 +164,14 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     # https://help.autodesk.com/view/fusion360/ENU/?contextId=CommandInputs
     inputs = args.command.commandInputs
 
-    # Add selection input for sheet bodies
+    # Add selection input for sheet metal bodies only
     body_selection = inputs.addSelectionInput(
         "target_bodies", 
-        "Sheet Bodies", 
-        "Select sheet bodies to process for joinery (minimum 2 required)"
+        "Sheet Metal Bodies", 
+        "Select sheet metal bodies to process for joinery (minimum 2 required)"
     )
-    # Use Bodies filter - we'll validate sheet metal properties in the handler
-    body_selection.addSelectionFilter("Bodies")
+    # Use SolidBodies filter as base, custom handler will filter to sheet metal only
+    body_selection.addSelectionFilter("SolidBodies")
     body_selection.setSelectionLimits(2, 0)  # Require at least 2 bodies, no maximum
     
     # Add tab width parameter
@@ -152,7 +183,7 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     default_tolerance = adsk.core.ValueInput.createByString("0.1 mm")
     inputs.addValueInput("tolerance", "Joint Tolerance", defaultLengthUnits, default_tolerance)
 
-    # TODO Connect to the events that are needed by this command.
+    # Connect to the events that are needed by this command.
     futil.add_handler(
         args.command.execute, command_execute, local_handlers=local_handlers
     )
@@ -169,6 +200,12 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     )
     futil.add_handler(
         args.command.destroy, command_destroy, local_handlers=local_handlers
+    )
+    
+    # Add custom selection handler to filter for sheet metal bodies only
+    sheet_metal_handler = SheetMetalSelectionHandler()
+    futil.add_handler(
+        args.command.selectionEvent, sheet_metal_handler, local_handlers=local_handlers
     )
 
 
@@ -252,31 +289,24 @@ def command_validate_input(args: adsk.core.ValidateInputsEventArgs):
     valid_selection = (isinstance(body_selection, adsk.core.SelectionCommandInput) and 
                       body_selection.selectionCount >= 2)
     
-    # Validate that selected bodies are suitable for sheet joinery
-    valid_sheet_bodies = True
+    # Validate thickness ranges (selection handler ensures only sheet metal bodies)
     thickness_warnings = []
     if valid_selection:
         for i in range(body_selection.selectionCount):
-            body = body_selection.selection(i).entity
-            # Leverage Fusion's sheet metal classification
-            if (body.objectType == adsk.fusion.BRepBody.classType() and 
-                hasattr(body, 'sheetMetalProperties') and 
-                body.sheetMetalProperties):
+            body = adsk.fusion.BRepBody.cast(body_selection.selection(i).entity)
+            # Selection handler guarantees this is a sheet metal body with isSheetMetal = True
+            if body and body.isSheetMetal and body.sheetMetalProperties:
                 # Check if thickness is in our tested range (2mm to 20mm) for warnings
                 thickness = body.sheetMetalProperties.thickness
                 if thickness < 0.2 or thickness > 2.0:  # 2mm to 20mm in cm
                     thickness_warnings.append(f"Body {i+1}: {thickness*10:.1f}mm thickness outside tested range (2-20mm)")
-            else:
-                # Not a sheet metal body
-                valid_sheet_bodies = False
-                break
                 
     valid_tab_width = (isinstance(tab_width_input, adsk.core.ValueCommandInput) and 
                       tab_width_input.value > 0)
     valid_tolerance = (isinstance(tolerance_input, adsk.core.ValueCommandInput) and 
                       tolerance_input.value >= 0)
     
-    args.areInputsValid = valid_selection and valid_sheet_bodies and valid_tab_width and valid_tolerance
+    args.areInputsValid = valid_selection and valid_tab_width and valid_tolerance
     
     # Log thickness warnings (but don't invalidate inputs)
     if thickness_warnings:
@@ -672,20 +702,20 @@ def generate_single_intersection_joint(body1, body2, tab_width, tolerance):
     try:
         futil.log(f"Generating joint between body1 and body2 with tab_width={tab_width}, tolerance={tolerance}")
         
-        # Validate that both bodies are proper sheet metal bodies
+        # Selection handler guarantees these are sheet metal bodies
         for i, body in enumerate([body1, body2], 1):
             if not body:
                 futil.log(f"ERROR: Body {i} is invalid")
                 return False
                 
-            if not (body.objectType == adsk.fusion.BRepBody.classType() and 
-                    hasattr(body, 'sheetMetalProperties') and 
-                    body.sheetMetalProperties):
-                futil.log(f"ERROR: Body {i} is not a sheet metal body")
+            # Cast to BRepBody and verify sheet metal properties
+            sheet_body = adsk.fusion.BRepBody.cast(body)
+            if not (sheet_body and sheet_body.isSheetMetal and sheet_body.sheetMetalProperties):
+                futil.log(f"ERROR: Body {i} lost sheet metal properties during processing")
                 return False
                 
             # Get sheet metal properties for joint generation
-            thickness = body.sheetMetalProperties.thickness
+            thickness = sheet_body.sheetMetalProperties.thickness
             futil.log(f"Body {i} thickness: {thickness*10:.2f}mm")
             
             # Warn if outside tested range but continue processing
