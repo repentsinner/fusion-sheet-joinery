@@ -1,0 +1,13 @@
+{
+    "autodeskProduct": "Fusion360",
+    "type": "addin",
+    "id": "38EE9339-591A-4F72-AFFF-7B20111CC10C",
+    "author": "Sheet Joinery Development Team",
+    "description": {
+        "": "Automates tab-and-slot joinery creation for sheet goods fabrication"
+    },
+    "version": "0.1.0",
+    "runOnStartup": false,
+    "supportedOS": "windows|mac",
+    "editEnabled": true
+}

@@ -3,7 +3,20 @@
     "allow": [
       "WebFetch(domain:help.autodesk.com)",
       "WebFetch(domain:autodeskfusion360.github.io)",
-      "WebFetch(domain:forums.autodesk.com)"
+      "WebFetch(domain:forums.autodesk.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(uv:*)",
+      "Bash(export:*)",
+      "Bash(mkdir:*)",
+      "Bash(python:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(PYTHONPATH=\"/Users/ritchie/Library/Application Support/Autodesk/Autodesk Fusion 360/API/Python/defs:$PYTHONPATH\" python -c \"import adsk.core, adsk.fusion; print(''Imports successful!'')\")",
+      "Bash(pyright:*)",
+      "Bash(echo:*)",
+      "Bash(rm:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }

@@ -5,6 +5,7 @@
 - **Purpose**: Automate tab-and-slot joinery for sheet goods fabrication
 - **Target**: Flat-pack furniture prototyping and CNC router manufacturing
 - **Materials**: Plywood, MDF, composite sheets (tested 2mm to 20mm, but not thickness-limited)
+- **Python Version**: Fusion 360 uses Python 3.12.4 (confirmed 2025-01-19)
 
 ## Requirements Standards
 **IMPORTANT**: This project uses RFC 2119 primary modal verbs for all requirements:

@@ -1,0 +1,48 @@
+# Fusion 360 Add-in Manifest
+# This file defines the add-in metadata and configuration
+
+# Basic add-in information
+id: "SheetJoineryAddin"
+name: "Sheet Goods Joinery"
+version: "0.1.0"
+description: "Automates tab-and-slot joinery creation for sheet goods fabrication"
+author: "Sheet Joinery Development Team"
+supportEmail: "support@example.com"
+
+# Entry points
+entryPoint: "__init__.py"
+stopEntryPoint: "__init__.py"
+
+# Supported contexts
+supportedOS: "windows|mac"
+minFusionVersionRequired: "2.0.18000"
+
+# Python version requirements (informational)
+pythonVersion: "3.9+"
+
+# Capabilities and permissions
+capabilities:
+  - "CustomFeatures"
+  - "CAM"
+  - "Timeline"
+  - "ParametricModeling"
+
+# Dependencies (if any external packages are needed)
+dependencies: []
+
+# Categories for add-in store
+categories:
+  - "Manufacturing"
+  - "Sheet Metal"
+  - "CAM"
+  - "Automation"
+
+# Documentation and help
+helpUrl: "https://github.com/username/fusion-sheet-joinery"
+documentationUrl: "https://github.com/username/fusion-sheet-joinery/blob/main/README.md"
+
+# Feature flags
+features:
+  customFeatures: true
+  camIntegration: true
+  crossWorkspace: true

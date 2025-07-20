@@ -18,6 +18,34 @@ This add-in automatically detects intersecting sheet bodies and generates approp
 
 ### Prerequisites
 - Autodesk Fusion 360 (latest version recommended)
+- Python 3.12.4 (matches Fusion 360's Python version)
+
+### Development Setup
+1. Clone this repository
+2. Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+3. Create virtual environment: `uv venv`
+4. Install dependencies: `uv sync`
+5. Configure development environment: `uv run setup_dev.py`
+
+#### Development Environment Setup
+
+The `setup_dev.py` script automatically configures your development environment for Fusion 360 add-in development:
+
+**What it does:**
+- Detects your Fusion 360 installation automatically (Windows/macOS)
+- Creates `pyrightconfig.json` with the correct API definition paths for type checking
+- Configures paths for both Fusion 360 APIs (`adsk.core`, `adsk.fusion`) and local modules
+
+**Usage:**
+```bash
+uv run setup_dev.py
+```
+
+**Output files:**
+- `pyrightconfig.json` - Dynamic paths for pyright type checker (gitignored)
+- Static configuration remains in `pyproject.toml`
+
+This enables full IntelliSense and type checking for Fusion 360 APIs in your IDE without manual configuration.
 - Fusion 360 Personal or Commercial license with CAM workspace access
 
 ### Install Steps

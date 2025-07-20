@@ -1,0 +1,27 @@
+# Python package requirements for Sheet Joinery Add-in
+# 
+# Note: Fusion 360 has an embedded Python interpreter (currently Python 3.12.4)
+# External packages must be manually installed or bundled with the add-in
+# Most functionality should use only Python standard library and Fusion API
+
+# Standard library modules used (no installation required):
+# - sys
+# - os
+# - traceback
+# - json
+# - math
+# - collections
+
+# Fusion 360 API modules (provided by Fusion):
+# - adsk.core
+# - adsk.fusion
+# - adsk.cam
+
+# Future external dependencies (if needed):
+# numpy>=1.21.0        # For advanced geometric calculations (if needed)
+# typing_extensions     # For enhanced type hints on Python 3.9
+
+# Development and testing dependencies (not needed in production):
+# pytest>=6.0          # For unit testing (development only)
+# black>=22.0           # For code formatting (development only)
+# mypy>=0.910          # For type checking (development only)
