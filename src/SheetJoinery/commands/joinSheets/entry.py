@@ -39,6 +39,31 @@ ICON_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resource
 local_handlers = []
 
 
+def calculate_sheet_metal_thickness(body):
+    """
+    Calculate sheet metal thickness by analyzing the body geometry.
+    Returns thickness in cm (Fusion's internal units).
+    """
+    try:
+        # Get the bounding box
+        bbox = body.boundingBox
+        
+        # Calculate the three dimensions
+        width = bbox.maxPoint.x - bbox.minPoint.x
+        height = bbox.maxPoint.y - bbox.minPoint.y
+        depth = bbox.maxPoint.z - bbox.minPoint.z
+        
+        # The thickness is typically the smallest dimension for sheet metal
+        thickness = min(width, height, depth)
+        
+        futil.log(f"Calculated thickness: {thickness*10:.2f}mm from dimensions: {width*10:.1f} x {height*10:.1f} x {depth*10:.1f}mm")
+        return thickness
+        
+    except Exception as e:
+        futil.log(f"Error calculating sheet metal thickness: {e!s}")
+        return None
+
+
 
 # Global custom feature definition - created once when add-in loads
 custom_feature_definition = None
@@ -290,10 +315,10 @@ def command_validate_input(args: adsk.core.ValidateInputsEventArgs):
         for i in range(body_selection.selectionCount):
             body = adsk.fusion.BRepBody.cast(body_selection.selection(i).entity)
             # Selection handler guarantees this is a sheet metal body with isSheetMetal = True
-            if body and body.isSheetMetal and body.sheetMetalProperties:
-                # Check if thickness is in our tested range (2mm to 20mm) for warnings
-                thickness = body.sheetMetalProperties.thickness
-                if thickness < 0.2 or thickness > 2.0:  # 2mm to 20mm in cm
+            if body and body.isSheetMetal:
+                # Calculate thickness from body geometry (API doesn't expose sheetMetalProperties)
+                thickness = calculate_sheet_metal_thickness(body)
+                if thickness and (thickness < 0.2 or thickness > 2.0):  # 2mm to 20mm in cm
                     thickness_warnings.append(f"Body {i+1}: {thickness*10:.1f}mm thickness outside tested range (2-20mm)")
                 
     valid_tab_width = (isinstance(tab_width_input, adsk.core.ValueCommandInput) and 
@@ -703,14 +728,18 @@ def generate_single_intersection_joint(body1, body2, tab_width, tolerance):
                 futil.log(f"ERROR: Body {i} is invalid")
                 return False
                 
-            # Cast to BRepBody and verify sheet metal properties
+            # Cast to BRepBody and verify it's still a sheet metal body
             sheet_body = adsk.fusion.BRepBody.cast(body)
-            if not (sheet_body and sheet_body.isSheetMetal and sheet_body.sheetMetalProperties):
-                futil.log(f"ERROR: Body {i} lost sheet metal properties during processing")
+            if not (sheet_body and sheet_body.isSheetMetal):
+                futil.log(f"ERROR: Body {i} lost sheet metal classification during processing")
                 return False
                 
-            # Get sheet metal properties for joint generation
-            thickness = sheet_body.sheetMetalProperties.thickness
+            # Calculate thickness from geometry (API doesn't expose sheetMetalProperties)
+            thickness = calculate_sheet_metal_thickness(sheet_body)
+            if not thickness:
+                futil.log(f"ERROR: Could not determine thickness for Body {i}")
+                return False
+                
             futil.log(f"Body {i} thickness: {thickness*10:.2f}mm")
             
             # Warn if outside tested range but continue processing
