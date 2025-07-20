@@ -1,4 +1,5 @@
 import adsk.core
+import adsk.fusion
 import os
 from ...lib import fusionAddInUtils as futil
 from ... import config
@@ -123,18 +124,31 @@ def command_execute(args: adsk.core.CommandEventArgs):
     # General logging for debug.
     futil.log(f'{CMD_NAME} Command Execute Event')
 
-    # TODO ******************************** Your code here ********************************
+    try:
+        # Get a reference to your command's inputs.
+        inputs = args.command.commandInputs
+        text_box: adsk.core.TextBoxCommandInput = inputs.itemById('text_box')
+        value_input: adsk.core.ValueCommandInput = inputs.itemById('value_input')
 
-    # Get a reference to your command's inputs.
-    inputs = args.command.commandInputs
-    text_box: adsk.core.TextBoxCommandInput = inputs.itemById('text_box')
-    value_input: adsk.core.ValueCommandInput = inputs.itemById('value_input')
-
-    # Do something interesting
-    text = text_box.text
-    expression = value_input.expression
-    msg = f'Your text: {text}<br>Your value: {expression}'
-    ui.messageBox(msg)
+        # Get input values
+        text = text_box.text
+        expression = value_input.expression
+        
+        # Get the active design
+        design = app.activeProduct
+        if not design:
+            ui.messageBox('No active design found')
+            return
+            
+        # Create a "Join Sheets" custom feature in the timeline
+        create_join_sheets_feature(design, text, expression)
+        
+        # Show success message
+        ui.messageBox(f'Created "Join Sheets" feature in timeline!<br>Text: {text}<br>Value: {expression}')
+        
+    except Exception as e:
+        futil.log(f'Error in command_execute: {str(e)}')
+        ui.messageBox(f'Error creating feature: {str(e)}')
 
 
 # This event handler is called when the command needs to compute a new preview in the graphics window.
@@ -177,3 +191,58 @@ def command_destroy(args: adsk.core.CommandEventArgs):
 
     global local_handlers
     local_handlers = []
+
+
+def create_join_sheets_feature(design, description_text, tolerance_value):
+    """Create a Join Sheets custom feature in the timeline"""
+    try:
+        # Get the root component
+        root_comp = design.rootComponent
+        
+        # Create a custom feature definition
+        custom_features = root_comp.features.customFeatures
+        
+        # Create the custom feature definition with required parameters
+        feature_id = 'JoinSheetsFeature'
+        default_name = 'Join Sheets'
+        icon_folder = ICON_FOLDER  # Use the same icon folder as the command
+        
+        custom_feature_def = adsk.fusion.CustomFeatureDefinition.create(feature_id, default_name, icon_folder)
+        
+        # Set additional properties
+        custom_feature_def.description = f'Join Sheets: {description_text} | Tolerance: {tolerance_value}mm'
+        
+        # Add the compute handler to the definition before creating the feature
+        futil.add_handler(custom_feature_def.customFeatureCompute, compute_join_sheets_feature, local_handlers=local_handlers)
+        
+        # Create the custom feature input and add it to the timeline
+        custom_feature_input = custom_features.createInput(custom_feature_def)
+        custom_feature = custom_features.add(custom_feature_input)
+        
+        futil.log(f'Successfully created Join Sheets custom feature: {custom_feature.name}')
+        return custom_feature
+        
+    except Exception as e:
+        futil.log(f'Error creating Join Sheets feature: {str(e)}')
+        raise
+
+
+def compute_join_sheets_feature(args):
+    """Compute handler for the Join Sheets custom feature"""
+    try:
+        custom_feature = args.customFeature
+        futil.log(f'Computing Join Sheets feature: {custom_feature.name}')
+        
+        # For now, just mark the compute as successful
+        # This is where we would implement the actual joinery generation logic
+        futil.log(f'Feature ID: {custom_feature.definition.id}')
+        futil.log(f'Feature name: {custom_feature.name}')
+        
+        # Mark the compute as successful
+        args.isComputed = True
+        futil.log('Join Sheets feature compute completed successfully')
+        
+    except Exception as e:
+        futil.log(f'Error computing Join Sheets feature: {str(e)}')
+        # Just mark as failed, don't try to set computeStatus
+        args.isComputed = False
