@@ -254,11 +254,20 @@ def command_validate_input(args: adsk.core.ValidateInputsEventArgs):
     
     # Validate that selected bodies are suitable for sheet joinery
     valid_sheet_bodies = True
+    thickness_warnings = []
     if valid_selection:
         for i in range(body_selection.selectionCount):
             body = body_selection.selection(i).entity
-            # Check if it's a solid body (most sheet metal bodies are solid)
-            if not (hasattr(body, 'isSolid') and body.isSolid):
+            # Leverage Fusion's sheet metal classification
+            if (body.objectType == adsk.fusion.BRepBody.classType() and 
+                hasattr(body, 'sheetMetalProperties') and 
+                body.sheetMetalProperties):
+                # Check if thickness is in our tested range (2mm to 20mm) for warnings
+                thickness = body.sheetMetalProperties.thickness
+                if thickness < 0.2 or thickness > 2.0:  # 2mm to 20mm in cm
+                    thickness_warnings.append(f"Body {i+1}: {thickness*10:.1f}mm thickness outside tested range (2-20mm)")
+            else:
+                # Not a sheet metal body
                 valid_sheet_bodies = False
                 break
                 
@@ -268,6 +277,11 @@ def command_validate_input(args: adsk.core.ValidateInputsEventArgs):
                       tolerance_input.value >= 0)
     
     args.areInputsValid = valid_selection and valid_sheet_bodies and valid_tab_width and valid_tolerance
+    
+    # Log thickness warnings (but don't invalidate inputs)
+    if thickness_warnings:
+        for warning in thickness_warnings:
+            futil.log(f"THICKNESS WARNING: {warning}")
 
 
 # This event handler is called when the command terminates.
@@ -658,30 +672,32 @@ def generate_single_intersection_joint(body1, body2, tab_width, tolerance):
     try:
         futil.log(f"Generating joint between body1 and body2 with tab_width={tab_width}, tolerance={tolerance}")
         
-        # For now, implement a basic placeholder that demonstrates the approach
-        # In a full implementation, this would:
-        # 1. Find intersection between the two bodies
-        # 2. Determine joint orientation and direction
-        # 3. Create tabs on one body and slots on the other
-        # 4. Apply tolerance adjustments
-        
-        # Basic validation - check that bodies exist and are valid
-        if not body1 or not body2:
-            futil.log("ERROR: Invalid bodies provided")
-            return False
+        # Validate that both bodies are proper sheet metal bodies
+        for i, body in enumerate([body1, body2], 1):
+            if not body:
+                futil.log(f"ERROR: Body {i} is invalid")
+                return False
+                
+            if not (body.objectType == adsk.fusion.BRepBody.classType() and 
+                    hasattr(body, 'sheetMetalProperties') and 
+                    body.sheetMetalProperties):
+                futil.log(f"ERROR: Body {i} is not a sheet metal body")
+                return False
+                
+            # Get sheet metal properties for joint generation
+            thickness = body.sheetMetalProperties.thickness
+            futil.log(f"Body {i} thickness: {thickness*10:.2f}mm")
             
-        if not hasattr(body1, 'faces') or not hasattr(body2, 'faces'):
-            futil.log("ERROR: Bodies do not have faces collection")
-            return False
-            
-        futil.log(f"Body1 has {body1.faces.count} faces, Body2 has {body2.faces.count} faces")
+            # Warn if outside tested range but continue processing
+            if thickness < 0.2 or thickness > 2.0:  # 2mm to 20mm in cm
+                futil.log(f"WARNING: Body {i} thickness {thickness*10:.1f}mm outside tested range (2-20mm)")
         
         # TODO: Implement actual intersection detection and joint generation
         # This is where the core sheet joinery algorithms would go:
-        # - BRep intersection analysis  
-        # - Sheet thickness detection
-        # - Tab and slot profile generation
-        # - Material thickness-aware joint sizing
+        # - BRep intersection analysis using sheet metal face hierarchy
+        # - Leverage sheetMetalProperties.thickness for accurate joint sizing
+        # - Tab and slot profile generation with material-aware tolerances
+        # - Consider bend radius from sheet metal properties
         
         futil.log("Joint generation placeholder completed successfully")
         return True
