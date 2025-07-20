@@ -137,10 +137,10 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     body_selection = inputs.addSelectionInput(
         "target_bodies", 
         "Sheet Bodies", 
-        "Select sheet metal bodies to process for joinery (minimum 2 required)"
+        "Select sheet bodies to process for joinery (minimum 2 required)"
     )
-    # Only allow sheet metal bodies for optimal performance and precision
-    body_selection.addSelectionFilter("SheetMetalBodies")
+    # Use Bodies filter - we'll validate sheet metal properties in the handler
+    body_selection.addSelectionFilter("Bodies")
     body_selection.setSelectionLimits(2, 0)  # Require at least 2 bodies, no maximum
     
     # Add tab width parameter
@@ -251,12 +251,23 @@ def command_validate_input(args: adsk.core.ValidateInputsEventArgs):
     # Check that we have at least 2 bodies selected and valid parameters
     valid_selection = (isinstance(body_selection, adsk.core.SelectionCommandInput) and 
                       body_selection.selectionCount >= 2)
+    
+    # Validate that selected bodies are suitable for sheet joinery
+    valid_sheet_bodies = True
+    if valid_selection:
+        for i in range(body_selection.selectionCount):
+            body = body_selection.selection(i).entity
+            # Check if it's a solid body (most sheet metal bodies are solid)
+            if not (hasattr(body, 'isSolid') and body.isSolid):
+                valid_sheet_bodies = False
+                break
+                
     valid_tab_width = (isinstance(tab_width_input, adsk.core.ValueCommandInput) and 
                       tab_width_input.value > 0)
     valid_tolerance = (isinstance(tolerance_input, adsk.core.ValueCommandInput) and 
                       tolerance_input.value >= 0)
     
-    args.areInputsValid = valid_selection and valid_tab_width and valid_tolerance
+    args.areInputsValid = valid_selection and valid_sheet_bodies and valid_tab_width and valid_tolerance
 
 
 # This event handler is called when the command terminates.
