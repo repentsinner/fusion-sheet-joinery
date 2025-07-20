@@ -19,7 +19,7 @@ DEBUG = True
 
 # Material thickness constraints (in mm)
 # These are the tested ranges - add-in may work outside but not guaranteed
-MIN_TESTED_THICKNESS = 2.0   # 2mm minimum tested thickness
+MIN_TESTED_THICKNESS = 2.0  # 2mm minimum tested thickness
 MAX_TESTED_THICKNESS = 20.0  # 20mm maximum tested thickness
 
 # Default joint parameters
@@ -29,28 +29,24 @@ DEFAULT_MIN_FINGER_COUNT = 3  # Minimum 3 fingers per joint
 
 # Material type constants
 MATERIAL_TYPES = {
-    'PLYWOOD': 'Plywood',
-    'MDF': 'MDF', 
-    'COMPOSITE': 'Composite',
-    'WOOD': 'Wood',
-    'ALUMINUM': 'Aluminum',
-    'STEEL': 'Steel',
-    'CUSTOM': 'Custom'
+    "PLYWOOD": "Plywood",
+    "MDF": "MDF",
+    "COMPOSITE": "Composite",
+    "WOOD": "Wood",
+    "ALUMINUM": "Aluminum",
+    "STEEL": "Steel",
+    "CUSTOM": "Custom",
 }
 
-# Joint type constants  
+# Joint type constants
 JOINT_TYPES = {
-    'FINGER': 'FingerJoint',
-    'BOX': 'BoxJoint', 
-    'T_SLOT': 'TSlotJoint',
-    'MORTISE_TENON': 'MortiseTenon'
+    "FINGER": "FingerJoint",
+    "BOX": "BoxJoint",
+    "T_SLOT": "TSlotJoint",
+    "MORTISE_TENON": "MortiseTenon",
 }
 
 # Dogbone type constants
-DOGBONE_TYPES = {
-    'CORNER': 'CornerDogbone',
-    'FACE': 'FaceDogbone',
-    'NONE': 'NoDogbone'
-}
+DOGBONE_TYPES = {"CORNER": "CornerDogbone", "FACE": "FaceDogbone", "NONE": "NoDogbone"}
 
 # Metadata storage uses ADDIN_ID as the attribute group name

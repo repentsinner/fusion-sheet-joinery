@@ -13,6 +13,7 @@ commands = [
     joinSheets,
 ]
 
+
 # Assumes you defined a "start" function in each of your modules.
 # The start function will be run when the add-in is started.
 def start():
