@@ -133,15 +133,32 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     # https://help.autodesk.com/view/fusion360/ENU/?contextId=CommandInputs
     inputs = args.command.commandInputs
 
-    # TODO Define the dialog for your command by adding different inputs to the command.
-
-    # Create a simple text box input.
-    inputs.addTextBoxCommandInput("text_box", "Some Text", "Enter some text.", 1, False)
-
-    # Create a value input field and set the default using 1 unit of the default length unit.
+    # Add selection input for sheet bodies
+    body_selection = inputs.addSelectionInput(
+        "target_bodies", 
+        "Sheet Bodies", 
+        "Select sheet bodies to process for joinery (minimum 2 required)"
+    )
+    body_selection.addSelectionFilter("SolidBodies")
+    body_selection.setSelectionLimits(2, 0)  # Require at least 2 bodies, no maximum
+    
+    # Add optional face selection for precise control
+    face_selection = inputs.addSelectionInput(
+        "target_faces",
+        "Specific Faces (Optional)", 
+        "Select specific face pairs for precise intersection control"
+    )
+    face_selection.addSelectionFilter("PlanarFaces")
+    face_selection.setSelectionLimits(0, 0)  # Optional selection
+    
+    # Add tab width parameter
     defaultLengthUnits = app.activeProduct.unitsManager.defaultLengthUnits
-    default_value = adsk.core.ValueInput.createByString("1")
-    inputs.addValueInput("value_input", "Some Value", defaultLengthUnits, default_value)
+    default_tab_width = adsk.core.ValueInput.createByString("10 mm")
+    inputs.addValueInput("tab_width", "Tab Width", defaultLengthUnits, default_tab_width)
+    
+    # Add tolerance parameter  
+    default_tolerance = adsk.core.ValueInput.createByString("0.1 mm")
+    inputs.addValueInput("tolerance", "Joint Tolerance", defaultLengthUnits, default_tolerance)
 
     # TODO Connect to the events that are needed by this command.
     futil.add_handler(
@@ -172,18 +189,34 @@ def command_execute(args: adsk.core.CommandEventArgs):
     try:
         # Get a reference to your command's inputs.
         inputs = args.command.commandInputs
-        text_box = inputs.itemById("text_box")
-        value_input = inputs.itemById("value_input")
+        body_selection = inputs.itemById("target_bodies")
+        face_selection = inputs.itemById("target_faces")
+        tab_width_input = inputs.itemById("tab_width")
+        tolerance_input = inputs.itemById("tolerance")
 
         # Type check the inputs
-        if not isinstance(text_box, adsk.core.TextBoxCommandInput):
-            raise TypeError("text_box is not a TextBoxCommandInput")
-        if not isinstance(value_input, adsk.core.ValueCommandInput):
-            raise TypeError("value_input is not a ValueCommandInput")
+        if not isinstance(body_selection, adsk.core.SelectionCommandInput):
+            raise TypeError("target_bodies is not a SelectionCommandInput")
+        if not isinstance(face_selection, adsk.core.SelectionCommandInput):
+            raise TypeError("target_faces is not a SelectionCommandInput")
+        if not isinstance(tab_width_input, adsk.core.ValueCommandInput):
+            raise TypeError("tab_width is not a ValueCommandInput")
+        if not isinstance(tolerance_input, adsk.core.ValueCommandInput):
+            raise TypeError("tolerance is not a ValueCommandInput")
 
-        # Get input values
-        text = text_box.text
-        expression = value_input.expression
+        # Get selected bodies
+        selected_bodies = []
+        for i in range(body_selection.selectionCount):
+            selected_bodies.append(body_selection.selection(i).entity)
+        
+        # Get selected faces (optional)
+        selected_faces = []
+        for i in range(face_selection.selectionCount):
+            selected_faces.append(face_selection.selection(i).entity)
+
+        # Get parameter values
+        tab_width = tab_width_input.value
+        tolerance = tolerance_input.value
 
         # Get the active design
         design = app.activeProduct
@@ -192,7 +225,7 @@ def command_execute(args: adsk.core.CommandEventArgs):
             return
 
         # Create a new feature (this is the "create" command)
-        create_join_sheets_feature(design, text, expression)
+        create_join_sheets_feature(design, selected_bodies, selected_faces, tab_width, tolerance)
 
     except Exception as e:
         futil.log(f"Error in command_execute: {e!s}")
@@ -227,11 +260,19 @@ def command_validate_input(args: adsk.core.ValidateInputsEventArgs):
     inputs = args.inputs
 
     # Verify the validity of the input values. This controls if the OK button is enabled or not.
-    valueInput = inputs.itemById("value_input")
-    if isinstance(valueInput, adsk.core.ValueCommandInput) and valueInput.value >= 0:
-        args.areInputsValid = True
-    else:
-        args.areInputsValid = False
+    body_selection = inputs.itemById("target_bodies")
+    tab_width_input = inputs.itemById("tab_width")
+    tolerance_input = inputs.itemById("tolerance")
+    
+    # Check that we have at least 2 bodies selected and valid parameters
+    valid_selection = (isinstance(body_selection, adsk.core.SelectionCommandInput) and 
+                      body_selection.selectionCount >= 2)
+    valid_tab_width = (isinstance(tab_width_input, adsk.core.ValueCommandInput) and 
+                      tab_width_input.value > 0)
+    valid_tolerance = (isinstance(tolerance_input, adsk.core.ValueCommandInput) and 
+                      tolerance_input.value >= 0)
+    
+    args.areInputsValid = valid_selection and valid_tab_width and valid_tolerance
 
 
 # This event handler is called when the command terminates.
@@ -283,24 +324,28 @@ def edit_command_created(args: adsk.core.CommandCreatedEventArgs):
     inputs = args.command.commandInputs
 
     # Create the same inputs as the create command
-    text_input = inputs.addTextBoxCommandInput(
-        "text_box", "Some Text", "Enter some text.", 1, False
-    )
-
-    # Create a value input field and set the default using 1 unit of the default length unit.
+    # Note: Selection inputs for editing are more complex - for now use value inputs to show stored data
+    
     defaultLengthUnits = app.activeProduct.unitsManager.defaultLengthUnits
-    default_value = adsk.core.ValueInput.createByString("1")
-    value_input = inputs.addValueInput(
-        "value_input", "Some Value", defaultLengthUnits, default_value
-    )
+    default_tab_width = adsk.core.ValueInput.createByString("10 mm")
+    tab_width_input = inputs.addValueInput("tab_width", "Tab Width", defaultLengthUnits, default_tab_width)
+    
+    default_tolerance = adsk.core.ValueInput.createByString("0.1 mm")
+    tolerance_input = inputs.addValueInput("tolerance", "Joint Tolerance", defaultLengthUnits, default_tolerance)
+    
+    # Add info display for selected entities (read-only for now)
+    body_info = inputs.addTextBoxCommandInput("body_info", "Selected Bodies", "Loading...", 2, True)
+    face_info = inputs.addTextBoxCommandInput("face_info", "Selected Faces", "Loading...", 2, True)
 
     # Populate with current values from the feature being edited
     if _edited_custom_feature:
-        stored_text, stored_value = get_feature_parameters(_edited_custom_feature)
-        text_input.text = stored_text
-        value_input.expression = stored_value
+        body_count, face_count, tab_width, tolerance = get_feature_parameters(_edited_custom_feature)
+        tab_width_input.expression = str(tab_width)
+        tolerance_input.expression = str(tolerance)
+        body_info.text = f"Bodies: {body_count} selected"
+        face_info.text = f"Faces: {face_count} selected"
         futil.log(
-            f'Populated dialog with: text="{stored_text}", value="{stored_value}"'
+            f'Populated edit dialog with: bodies={body_count}, faces={face_count}, tab_width={tab_width}, tolerance={tolerance}'
         )
 
     # Connect to the edit-specific event handlers
@@ -332,18 +377,18 @@ def edit_command_execute(args: adsk.core.CommandEventArgs):
     try:
         # Get a reference to your command's inputs.
         inputs = args.command.commandInputs
-        text_box = inputs.itemById("text_box")
-        value_input = inputs.itemById("value_input")
+        tab_width_input = inputs.itemById("tab_width")
+        tolerance_input = inputs.itemById("tolerance")
 
         # Type check the inputs
-        if not isinstance(text_box, adsk.core.TextBoxCommandInput):
-            raise TypeError("text_box is not a TextBoxCommandInput")
-        if not isinstance(value_input, adsk.core.ValueCommandInput):
-            raise TypeError("value_input is not a ValueCommandInput")
+        if not isinstance(tab_width_input, adsk.core.ValueCommandInput):
+            raise TypeError("tab_width is not a ValueCommandInput")
+        if not isinstance(tolerance_input, adsk.core.ValueCommandInput):
+            raise TypeError("tolerance is not a ValueCommandInput")
 
         # Get input values
-        text = text_box.text
-        expression = value_input.expression
+        tab_width = tab_width_input.value
+        tolerance = tolerance_input.value
 
         # Get the active design
         design = app.activeProduct
@@ -357,7 +402,7 @@ def edit_command_execute(args: adsk.core.CommandEventArgs):
             try:
                 token = _edited_custom_feature.entityToken  # type: ignore
                 # Update the existing feature using the global reference
-                update_join_sheets_feature(design, token, text, expression)
+                update_join_sheets_feature(design, token, tab_width, tolerance)
 
                 try:
                     name = _edited_custom_feature.name  # type: ignore
@@ -389,11 +434,16 @@ def edit_command_input_changed(args: adsk.core.InputChangedEventArgs):
 def edit_command_validate_input(args: adsk.core.ValidateInputsEventArgs):
     futil.log(f"{EDIT_CMD_NAME} Validate Input Event")
     inputs = args.inputs
-    valueInput = inputs.itemById("value_input")
-    if isinstance(valueInput, adsk.core.ValueCommandInput) and valueInput.value >= 0:
-        args.areInputsValid = True
-    else:
-        args.areInputsValid = False
+    tab_width_input = inputs.itemById("tab_width")
+    tolerance_input = inputs.itemById("tolerance")
+    
+    # Check that parameters are valid
+    valid_tab_width = (isinstance(tab_width_input, adsk.core.ValueCommandInput) and 
+                      tab_width_input.value > 0)
+    valid_tolerance = (isinstance(tolerance_input, adsk.core.ValueCommandInput) and 
+                      tolerance_input.value >= 0)
+    
+    args.areInputsValid = valid_tab_width and valid_tolerance
 
 
 def edit_command_destroy(_: adsk.core.CommandEventArgs):
@@ -430,7 +480,7 @@ def create_custom_feature_definition():
         raise
 
 
-def create_join_sheets_feature(design, description_text, tolerance_value):
+def create_join_sheets_feature(design, selected_bodies, selected_faces, tab_width, tolerance):
     """Create a Join Sheets custom feature instance in the timeline"""
     try:
         if not custom_feature_definition:
@@ -442,10 +492,19 @@ def create_join_sheets_feature(design, description_text, tolerance_value):
 
         # Create the custom feature input using the pre-created definition
         custom_feature_input = custom_features.createInput(custom_feature_definition)
+        
+        # Add dependencies on the selected bodies
+        for body in selected_bodies:
+            custom_feature_input.addDependency(body)
+            
+        # Add dependencies on selected faces if any
+        for face in selected_faces:
+            custom_feature_input.addDependency(face)
+        
         custom_feature = custom_features.add(custom_feature_input)
 
         # Store the parameters in the feature for later retrieval
-        store_feature_parameters(custom_feature, description_text, tolerance_value)
+        store_feature_parameters(custom_feature, selected_bodies, selected_faces, tab_width, tolerance)
 
         futil.log(
             f"Successfully created Join Sheets custom feature: {custom_feature.name}"
@@ -457,10 +516,8 @@ def create_join_sheets_feature(design, description_text, tolerance_value):
         raise
 
 
-def update_join_sheets_feature(
-    design, feature_token, description_text, tolerance_value
-):
-    """Update an existing Join Sheets custom feature"""
+def update_join_sheets_feature(design, feature_token, tab_width, tolerance):
+    """Update an existing Join Sheets custom feature (parameters only)"""
     try:
         # Find the existing feature by its token
         root_comp = design.rootComponent
@@ -474,11 +531,29 @@ def update_join_sheets_feature(
 
         if not existing_feature:
             futil.log(f"Could not find existing feature with token: {feature_token}")
-            # Fallback to creating a new feature
-            return create_join_sheets_feature(design, description_text, tolerance_value)
+            ui.messageBox("Could not find feature to update")
+            return None
 
-        # Update the stored parameters
-        store_feature_parameters(existing_feature, description_text, tolerance_value)
+        # Get current parameters to preserve body/face selections
+        body_count, face_count, current_tab_width, current_tolerance = get_feature_parameters(existing_feature)
+        
+        # Update only the tab width and tolerance parameters
+        attrs = existing_feature.attributes
+        group_name = config.ADDIN_ID
+        
+        # Update the attributes
+        tab_width_attr = attrs.itemByName(group_name, "tab_width")
+        tolerance_attr = attrs.itemByName(group_name, "tolerance")
+        
+        if tab_width_attr:
+            tab_width_attr.value = str(tab_width)
+        else:
+            attrs.add(group_name, "tab_width", str(tab_width))
+            
+        if tolerance_attr:
+            tolerance_attr.value = str(tolerance)
+        else:
+            attrs.add(group_name, "tolerance", str(tolerance))
 
         # The feature will automatically recompute when parameters change
         # No need to rollTo which moves the timeline marker
@@ -493,7 +568,7 @@ def update_join_sheets_feature(
         raise
 
 
-def store_feature_parameters(custom_feature, description_text, tolerance_value):
+def store_feature_parameters(custom_feature, selected_bodies, selected_faces, tab_width, tolerance):
     """Store parameters in the custom feature for later retrieval"""
     try:
         # Use attributes to store our parameters
@@ -501,11 +576,20 @@ def store_feature_parameters(custom_feature, description_text, tolerance_value):
         group_name = config.ADDIN_ID
 
         # Store the parameters as attributes
-        attrs.add(group_name, "description_text", description_text)
-        attrs.add(group_name, "tolerance_value", str(tolerance_value))
+        attrs.add(group_name, "body_count", str(len(selected_bodies)))
+        attrs.add(group_name, "face_count", str(len(selected_faces)))
+        attrs.add(group_name, "tab_width", str(tab_width))
+        attrs.add(group_name, "tolerance", str(tolerance))
+        
+        # Store entity tokens for bodies and faces (for edit functionality)
+        for i, body in enumerate(selected_bodies):
+            attrs.add(group_name, f"body_{i}_token", body.entityToken)
+            
+        for i, face in enumerate(selected_faces):
+            attrs.add(group_name, f"face_{i}_token", face.entityToken)
 
         futil.log(
-            f'Stored parameters in feature: text="{description_text}", value="{tolerance_value}"'
+            f'Stored parameters in feature: bodies={len(selected_bodies)}, faces={len(selected_faces)}, tab_width={tab_width}, tolerance={tolerance}'
         )
 
     except Exception as e:
@@ -518,17 +602,29 @@ def get_feature_parameters(custom_feature):
         attrs = custom_feature.attributes
         group_name = config.ADDIN_ID
 
-        description_text = attrs.itemByName(group_name, "description_text")
-        tolerance_value = attrs.itemByName(group_name, "tolerance_value")
+        # Get parameter counts
+        body_count_attr = attrs.itemByName(group_name, "body_count")
+        face_count_attr = attrs.itemByName(group_name, "face_count")
+        tab_width_attr = attrs.itemByName(group_name, "tab_width") 
+        tolerance_attr = attrs.itemByName(group_name, "tolerance")
 
-        text = description_text.value if description_text else "Default text"
-        value = tolerance_value.value if tolerance_value else "1"
+        body_count = int(body_count_attr.value) if body_count_attr else 0
+        face_count = int(face_count_attr.value) if face_count_attr else 0
+        tab_width = float(tab_width_attr.value) if tab_width_attr else 10.0
+        tolerance = float(tolerance_attr.value) if tolerance_attr else 0.1
 
-        return text, value
+        # Reconstruct entity lists from tokens
+        selected_bodies = []
+        selected_faces = []
+        
+        # Note: For edit functionality, we would need to find entities by token
+        # This is a simplified version for now
+        
+        return body_count, face_count, tab_width, tolerance
 
     except Exception as e:
         futil.log(f"Error retrieving feature parameters: {e!s}")
-        return "Default text", "1"
+        return 0, 0, 10.0, 0.1
 
 
 def compute_join_sheets_feature(args):
@@ -537,10 +633,78 @@ def compute_join_sheets_feature(args):
         custom_feature = args.customFeature
         futil.log(f"Computing Join Sheets feature: {custom_feature.name}")
 
-        # This is where we would implement the actual joinery generation logic
-        # For now, just mark the compute as successful
-        args.isComputed = True
+        # Get stored parameters
+        body_count, face_count, tab_width, tolerance = get_feature_parameters(custom_feature)
+        futil.log(f"Feature parameters: bodies={body_count}, faces={face_count}, tab_width={tab_width}, tolerance={tolerance}")
+
+        # Get dependencies (the selected bodies and faces)
+        dependencies = custom_feature.dependencies
+        futil.log(f"Feature has {dependencies.count} dependencies")
+
+        if dependencies.count < 2:
+            futil.log("WARNING: Feature needs at least 2 body dependencies")
+            args.isComputed = True  # Don't fail, just warn
+            return
+
+        # Collect the dependent bodies 
+        bodies = []
+        faces = []
+        
+        for i in range(dependencies.count):
+            entity = dependencies.item(i).entity
+            if hasattr(entity, 'bodyType'):  # It's a body
+                bodies.append(entity)
+            elif hasattr(entity, 'surfaceType'):  # It's a face
+                faces.append(entity)
+
+        futil.log(f"Found {len(bodies)} bodies and {len(faces)} faces in dependencies")
+
+        if len(bodies) >= 2:
+            # Generate slot-and-tab joints between the first two bodies
+            success = generate_single_intersection_joint(bodies[0], bodies[1], tab_width, tolerance)
+            args.isComputed = success
+        else:
+            futil.log("ERROR: Need at least 2 bodies to generate joints")
+            args.isComputed = False
 
     except Exception as e:
         futil.log(f"Error computing Join Sheets feature: {e!s}")
         args.isComputed = False
+
+
+def generate_single_intersection_joint(body1, body2, tab_width, tolerance):
+    """Generate slot-and-tab joint between two sheet bodies"""
+    try:
+        futil.log(f"Generating joint between body1 and body2 with tab_width={tab_width}, tolerance={tolerance}")
+        
+        # For now, implement a basic placeholder that demonstrates the approach
+        # In a full implementation, this would:
+        # 1. Find intersection between the two bodies
+        # 2. Determine joint orientation and direction
+        # 3. Create tabs on one body and slots on the other
+        # 4. Apply tolerance adjustments
+        
+        # Basic validation - check that bodies exist and are valid
+        if not body1 or not body2:
+            futil.log("ERROR: Invalid bodies provided")
+            return False
+            
+        if not hasattr(body1, 'faces') or not hasattr(body2, 'faces'):
+            futil.log("ERROR: Bodies do not have faces collection")
+            return False
+            
+        futil.log(f"Body1 has {body1.faces.count} faces, Body2 has {body2.faces.count} faces")
+        
+        # TODO: Implement actual intersection detection and joint generation
+        # This is where the core sheet joinery algorithms would go:
+        # - BRep intersection analysis  
+        # - Sheet thickness detection
+        # - Tab and slot profile generation
+        # - Material thickness-aware joint sizing
+        
+        futil.log("Joint generation placeholder completed successfully")
+        return True
+        
+    except Exception as e:
+        futil.log(f"Error in generate_single_intersection_joint: {e!s}")
+        return False

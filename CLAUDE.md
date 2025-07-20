@@ -34,7 +34,8 @@
 
 ## Key Technical Decisions
 - **Custom Features API**: MUST use for parametric timeline integration
-- **Sheet Metal BRep Filtering**: Use Fusion's sheet metal body types for performance
+- **Manual Selection First**: Use SelectionCommandInput for user-selected geometry (MVP approach)
+- **Sheet Metal BRep Filtering**: Use Fusion's sheet metal body types for performance  
 - **CAM Limitations**: Work around lack of custom operations with geometry overrides
 - **Cross-Platform**: MUST support Windows and macOS
 - **Metadata Strategy**: Face attributes for Design-to-CAM communication
@@ -59,6 +60,16 @@
 - Phase 5-6: Polish & Release (Weeks 10-12)
 
 ## Post-MVP Enhancements
+
+### Automatic Intersection Detection
+- **Current MVP**: Manual selection using SelectionCommandInput (follows Fusion patterns)
+- **Post-MVP Enhancement**: Add "Process All Sheet Bodies" checkbox option
+- **Implementation Strategy**: 
+  - Add dropdown for "Manual Selection" vs "Process All" modes
+  - Automatic detection scans all sheet metal bodies for intersections
+  - User can still override/exclude specific intersections
+- **Benefits**: One-click processing while maintaining user control
+
 ### Material-Aware Cutting Direction Intelligence
 - **Wood/Anisotropic Materials**: Validate or enforce conventional milling
   - Wood grain direction affects cutting forces
