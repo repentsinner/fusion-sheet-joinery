@@ -137,9 +137,10 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     body_selection = inputs.addSelectionInput(
         "target_bodies", 
         "Sheet Bodies", 
-        "Select sheet bodies to process for joinery (minimum 2 required)"
+        "Select sheet metal bodies to process for joinery (minimum 2 required)"
     )
-    body_selection.addSelectionFilter("SolidBodies")
+    # Only allow sheet metal bodies for optimal performance and precision
+    body_selection.addSelectionFilter("SheetMetalBodies")
     body_selection.setSelectionLimits(2, 0)  # Require at least 2 bodies, no maximum
     
     # Add tab width parameter
