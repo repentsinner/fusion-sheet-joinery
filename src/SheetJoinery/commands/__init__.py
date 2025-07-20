@@ -5,12 +5,12 @@
 # directories and import it here.
 # You need to use aliases (import "entry" as "my_module") assuming you have the
 # default module named "entry".
-from .helloWorld import entry as helloWorld
+from .joinSheets import entry as joinSheets
 
 # TODO add your imported modules to this list.
 # Fusion will automatically call the start() and stop() functions.
 commands = [
-    helloWorld,
+    joinSheets,
 ]
 
 # Assumes you defined a "start" function in each of your modules.
