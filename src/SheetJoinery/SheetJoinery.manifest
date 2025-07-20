@@ -6,7 +6,7 @@
     "description": {
         "": "Automates tab-and-slot joinery creation for sheet goods fabrication"
     },
-    "version": "0.1.0",
+    "version": "0.1.2",
     "runOnStartup": false,
     "supportedOS": "windows|mac",
     "editEnabled": true

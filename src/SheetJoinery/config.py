@@ -3,14 +3,19 @@ Configuration constants and settings for the Sheet Joinery Add-in
 """
 
 # Add-in metadata
+import os
+
 ADDIN_ID = "SheetJoineryAddin"
-ADDIN_NAME = "Sheet Goods Joinery"
-ADDIN_VERSION = "0.1.0"
+ADDIN_NAME = os.path.basename(os.path.dirname(__file__))
+COMPANY_NAME = "Ritchie Industries"
+ADDIN_VERSION = "0.1.2"
 ADDIN_DESCRIPTION = "Automates tab-and-slot joinery creation for sheet goods fabrication"
 
 # Python version requirements
 REQUIRED_PYTHON_MAJOR = 3
 REQUIRED_PYTHON_MINOR = 9
+
+DEBUG = True
 
 # Fusion 360 Python version (confirmed)
 FUSION_PYTHON_VERSION = "3.12.4"  # Current Fusion 360 embedded Python version
