@@ -142,15 +142,6 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     body_selection.addSelectionFilter("SolidBodies")
     body_selection.setSelectionLimits(2, 0)  # Require at least 2 bodies, no maximum
     
-    # Add optional face selection for precise control
-    face_selection = inputs.addSelectionInput(
-        "target_faces",
-        "Specific Faces (Optional)", 
-        "Select specific face pairs for precise intersection control"
-    )
-    face_selection.addSelectionFilter("PlanarFaces")
-    face_selection.setSelectionLimits(0, 0)  # Optional selection
-    
     # Add tab width parameter
     defaultLengthUnits = app.activeProduct.unitsManager.defaultLengthUnits
     default_tab_width = adsk.core.ValueInput.createByString("10 mm")
@@ -190,15 +181,12 @@ def command_execute(args: adsk.core.CommandEventArgs):
         # Get a reference to your command's inputs.
         inputs = args.command.commandInputs
         body_selection = inputs.itemById("target_bodies")
-        face_selection = inputs.itemById("target_faces")
         tab_width_input = inputs.itemById("tab_width")
         tolerance_input = inputs.itemById("tolerance")
 
         # Type check the inputs
         if not isinstance(body_selection, adsk.core.SelectionCommandInput):
             raise TypeError("target_bodies is not a SelectionCommandInput")
-        if not isinstance(face_selection, adsk.core.SelectionCommandInput):
-            raise TypeError("target_faces is not a SelectionCommandInput")
         if not isinstance(tab_width_input, adsk.core.ValueCommandInput):
             raise TypeError("tab_width is not a ValueCommandInput")
         if not isinstance(tolerance_input, adsk.core.ValueCommandInput):
@@ -208,11 +196,6 @@ def command_execute(args: adsk.core.CommandEventArgs):
         selected_bodies = []
         for i in range(body_selection.selectionCount):
             selected_bodies.append(body_selection.selection(i).entity)
-        
-        # Get selected faces (optional)
-        selected_faces = []
-        for i in range(face_selection.selectionCount):
-            selected_faces.append(face_selection.selection(i).entity)
 
         # Get parameter values
         tab_width = tab_width_input.value
@@ -225,7 +208,7 @@ def command_execute(args: adsk.core.CommandEventArgs):
             return
 
         # Create a new feature (this is the "create" command)
-        create_join_sheets_feature(design, selected_bodies, selected_faces, tab_width, tolerance)
+        create_join_sheets_feature(design, selected_bodies, tab_width, tolerance)
 
     except Exception as e:
         futil.log(f"Error in command_execute: {e!s}")
@@ -335,17 +318,15 @@ def edit_command_created(args: adsk.core.CommandCreatedEventArgs):
     
     # Add info display for selected entities (read-only for now)
     body_info = inputs.addTextBoxCommandInput("body_info", "Selected Bodies", "Loading...", 2, True)
-    face_info = inputs.addTextBoxCommandInput("face_info", "Selected Faces", "Loading...", 2, True)
 
     # Populate with current values from the feature being edited
     if _edited_custom_feature:
-        body_count, face_count, tab_width, tolerance = get_feature_parameters(_edited_custom_feature)
+        body_count, tab_width, tolerance = get_feature_parameters(_edited_custom_feature)
         tab_width_input.expression = str(tab_width)
         tolerance_input.expression = str(tolerance)
         body_info.text = f"Bodies: {body_count} selected"
-        face_info.text = f"Faces: {face_count} selected"
         futil.log(
-            f'Populated edit dialog with: bodies={body_count}, faces={face_count}, tab_width={tab_width}, tolerance={tolerance}'
+            f'Populated edit dialog with: bodies={body_count}, tab_width={tab_width}, tolerance={tolerance}'
         )
 
     # Connect to the edit-specific event handlers
@@ -480,7 +461,7 @@ def create_custom_feature_definition():
         raise
 
 
-def create_join_sheets_feature(design, selected_bodies, selected_faces, tab_width, tolerance):
+def create_join_sheets_feature(design, selected_bodies, tab_width, tolerance):
     """Create a Join Sheets custom feature instance in the timeline"""
     try:
         if not custom_feature_definition:
@@ -496,15 +477,11 @@ def create_join_sheets_feature(design, selected_bodies, selected_faces, tab_widt
         # Add dependencies on the selected bodies
         for i, body in enumerate(selected_bodies):
             custom_feature_input.addDependency(f"body_{i}", body)
-            
-        # Add dependencies on selected faces if any
-        for i, face in enumerate(selected_faces):
-            custom_feature_input.addDependency(f"face_{i}", face)
         
         custom_feature = custom_features.add(custom_feature_input)
 
         # Store the parameters in the feature for later retrieval
-        store_feature_parameters(custom_feature, selected_bodies, selected_faces, tab_width, tolerance)
+        store_feature_parameters(custom_feature, selected_bodies, tab_width, tolerance)
 
         futil.log(
             f"Successfully created Join Sheets custom feature: {custom_feature.name}"
@@ -534,8 +511,8 @@ def update_join_sheets_feature(design, feature_token, tab_width, tolerance):
             ui.messageBox("Could not find feature to update")
             return None
 
-        # Get current parameters to preserve body/face selections
-        body_count, face_count, current_tab_width, current_tolerance = get_feature_parameters(existing_feature)
+        # Get current parameters to preserve body selections
+        body_count, current_tab_width, current_tolerance = get_feature_parameters(existing_feature)
         
         # Update only the tab width and tolerance parameters
         attrs = existing_feature.attributes
@@ -568,7 +545,7 @@ def update_join_sheets_feature(design, feature_token, tab_width, tolerance):
         raise
 
 
-def store_feature_parameters(custom_feature, selected_bodies, selected_faces, tab_width, tolerance):
+def store_feature_parameters(custom_feature, selected_bodies, tab_width, tolerance):
     """Store parameters in the custom feature for later retrieval"""
     try:
         # Use attributes to store our parameters
@@ -577,19 +554,15 @@ def store_feature_parameters(custom_feature, selected_bodies, selected_faces, ta
 
         # Store the parameters as attributes
         attrs.add(group_name, "body_count", str(len(selected_bodies)))
-        attrs.add(group_name, "face_count", str(len(selected_faces)))
         attrs.add(group_name, "tab_width", str(tab_width))
         attrs.add(group_name, "tolerance", str(tolerance))
         
-        # Store entity tokens for bodies and faces (for edit functionality)
+        # Store entity tokens for bodies (for edit functionality)
         for i, body in enumerate(selected_bodies):
             attrs.add(group_name, f"body_{i}_token", body.entityToken)
-            
-        for i, face in enumerate(selected_faces):
-            attrs.add(group_name, f"face_{i}_token", face.entityToken)
 
         futil.log(
-            f'Stored parameters in feature: bodies={len(selected_bodies)}, faces={len(selected_faces)}, tab_width={tab_width}, tolerance={tolerance}'
+            f'Stored parameters in feature: bodies={len(selected_bodies)}, tab_width={tab_width}, tolerance={tolerance}'
         )
 
     except Exception as e:
@@ -604,27 +577,21 @@ def get_feature_parameters(custom_feature):
 
         # Get parameter counts
         body_count_attr = attrs.itemByName(group_name, "body_count")
-        face_count_attr = attrs.itemByName(group_name, "face_count")
         tab_width_attr = attrs.itemByName(group_name, "tab_width") 
         tolerance_attr = attrs.itemByName(group_name, "tolerance")
 
         body_count = int(body_count_attr.value) if body_count_attr else 0
-        face_count = int(face_count_attr.value) if face_count_attr else 0
         tab_width = float(tab_width_attr.value) if tab_width_attr else 10.0
         tolerance = float(tolerance_attr.value) if tolerance_attr else 0.1
 
-        # Reconstruct entity lists from tokens
-        selected_bodies = []
-        selected_faces = []
-        
         # Note: For edit functionality, we would need to find entities by token
         # This is a simplified version for now
         
-        return body_count, face_count, tab_width, tolerance
+        return body_count, tab_width, tolerance
 
     except Exception as e:
         futil.log(f"Error retrieving feature parameters: {e!s}")
-        return 0, 0, 10.0, 0.1
+        return 0, 10.0, 0.1
 
 
 def compute_join_sheets_feature(args):
@@ -634,10 +601,10 @@ def compute_join_sheets_feature(args):
         futil.log(f"Computing Join Sheets feature: {custom_feature.name}")
 
         # Get stored parameters
-        body_count, face_count, tab_width, tolerance = get_feature_parameters(custom_feature)
-        futil.log(f"Feature parameters: bodies={body_count}, faces={face_count}, tab_width={tab_width}, tolerance={tolerance}")
+        body_count, tab_width, tolerance = get_feature_parameters(custom_feature)
+        futil.log(f"Feature parameters: bodies={body_count}, tab_width={tab_width}, tolerance={tolerance}")
 
-        # Get dependencies (the selected bodies and faces)
+        # Get dependencies (the selected bodies)
         dependencies = custom_feature.dependencies
         futil.log(f"Feature has {dependencies.count} dependencies")
 
@@ -646,9 +613,8 @@ def compute_join_sheets_feature(args):
             args.isComputed = True  # Don't fail, just warn
             return
 
-        # Collect the dependent bodies and faces by parameter name
+        # Collect the dependent bodies by parameter name
         bodies = []
-        faces = []
         
         for i in range(dependencies.count):
             dependency = dependencies.item(i)
@@ -659,10 +625,8 @@ def compute_join_sheets_feature(args):
             
             if param_name.startswith("body_"):
                 bodies.append(entity)
-            elif param_name.startswith("face_"):
-                faces.append(entity)
 
-        futil.log(f"Found {len(bodies)} bodies and {len(faces)} faces in dependencies")
+        futil.log(f"Found {len(bodies)} bodies in dependencies")
 
         if len(bodies) >= 2:
             # Generate slot-and-tab joints between the first two bodies
