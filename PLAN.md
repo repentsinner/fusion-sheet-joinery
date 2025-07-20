@@ -32,7 +32,7 @@ This development plan outlines the implementation strategy for the Fusion 360 Sh
 **Tasks**:
 - [ ] Implement `IntersectionDetector` class
 - [ ] **Sheet metal BRep filtering** - Leverage Fusion's sheet metal body classification for performance
-- [ ] **Thickness validation** - Use `sheetMetalProperties.thickness` to enforce 1/8" to 3/4" range
+- [ ] **Thickness validation** - Use `sheetMetalProperties.thickness` to warn outside 2mm to 20mm tested range
 - [ ] BRep geometry analysis for sheet body intersections
 - [ ] Intersection classification (T-joint, cross-joint, edge-to-edge)
 - [ ] Spatial indexing for performance optimization

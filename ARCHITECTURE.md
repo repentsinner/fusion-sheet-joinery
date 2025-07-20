@@ -85,7 +85,7 @@ class IntersectionDetector:
             if (body.objectType == adsk.fusion.BRepBody.classType() and 
                 hasattr(body, 'sheetMetalProperties') and 
                 body.sheetMetalProperties):
-                # Validate thickness is in our supported range (1/8" to 3/4")
+                # Check if thickness is in our tested range (2mm to 20mm) for warnings
                 thickness = body.sheetMetalProperties.thickness
                 if self._validate_thickness_range(thickness):
                     sheet_bodies.append(body)
@@ -102,7 +102,7 @@ class IntersectionDetector:
 
 **Responsibilities**:
 - **Sheet Metal Filtering**: Leverage Fusion's sheet metal BRep classification for semantic correctness
-- **Thickness Validation**: Enforce supported thickness range (1/8" to 3/4") using sheet metal properties
+- **Thickness Validation**: Check tested range (2mm to 20mm) for user warnings, don't enforce limits
 - **Performance Optimization**: Dramatically reduce intersection candidates by filtering non-sheet bodies
 - **Intersection Analysis**: BRep geometry analysis with sheet metal context
 - **Classification**: Intersection type determination (T-joint, cross-joint, edge-to-edge)
@@ -168,7 +168,7 @@ face.attributes.add('JoineryAddin', 'DogboneHint', 'CornerDogbone')
 face.attributes.add('JoineryAddin', 'DogboneReason', 'TabClearance')
 
 # Dimensional data
-face.attributes.add('JoineryAddin', 'NominalThickness', '0.75')
+face.attributes.add('JoineryAddin', 'NominalThickness', '9.0')
 face.attributes.add('JoineryAddin', 'ToleranceClass', 'Precision')
 ```
 

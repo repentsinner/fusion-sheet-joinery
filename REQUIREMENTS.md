@@ -6,7 +6,7 @@ This document specifies requirements for an Autodesk Fusion 360 add-in that auto
 
 ### Project Scope
 - **Primary Use Case**: Flat-pack furniture prototyping and fabrication
-- **Material Target**: Plywood, MDF, and composite sheets (1/8" to 3/4" nominal thickness)
+- **Material Target**: Plywood, MDF, and composite sheets (tested 2mm to 20mm thickness range)
 - **Manufacturing Process**: CNC router 3-axis machining
 - **Assembly Method**: Glued/welded joints or external fasteners
 - **MVP Focus**: Automatic joint generation with manual override capabilities
@@ -16,7 +16,7 @@ This document specifies requirements for an Autodesk Fusion 360 add-in that auto
 ### FR-001: Automatic Intersection Detection
 **Priority**: High
 
-The add-in SHALL automatically detect overlapping sheet body volumes and identify potential joint locations.
+The add-in MUST automatically detect overlapping sheet body volumes and identify potential joint locations.
 
 **Acceptance Criteria**:
 - Scan assembly for all sheet body intersections
@@ -28,7 +28,7 @@ The add-in SHALL automatically detect overlapping sheet body volumes and identif
 ### FR-002: Joint Type Generation
 **Priority**: High
 
-The add-in SHALL generate appropriate joint types based on intersection geometry.
+The add-in MUST generate appropriate joint types based on intersection geometry.
 
 **Supported Joint Types**:
 - **Finger Joints**: Alternating tab/slot pattern for edge-to-edge connections
@@ -41,14 +41,14 @@ The add-in SHALL generate appropriate joint types based on intersection geometry
 - Generate complementary tabs and slots between mating components
 - Maintain material thickness-driven joint sizing
 - Support configurable tolerance and clearance values
-- Handle material thickness variations (1/8" to 3/4")
+- Handle material thickness variations (tested range 2mm to 20mm)
 
 ### FR-003: Parametric Timeline Integration
 **Priority**: High
 
 The add-in MUST use Fusion's Custom Features API (or the most advanced parametric API capability available) to create true parametric timeline integration with automatic regeneration.
 
-**API Requirement**: This feature SHALL be implemented using `adsk.fusion.CustomFeature` to ensure full parametric behavior equivalent to native Fusion features.
+**API Requirement**: This feature MUST be implemented using `adsk.fusion.CustomFeature` to ensure full parametric behavior equivalent to native Fusion features.
 
 **Acceptance Criteria**:
 - Create single "Sheet Joinery" node in timeline using Custom Features API
@@ -61,7 +61,7 @@ The add-in MUST use Fusion's Custom Features API (or the most advanced parametri
 ### FR-004: Cross-Workspace Material Adjustment
 **Priority**: Medium
 
-The add-in SHALL support material thickness adjustments in CAM workspace.
+The add-in MUST support material thickness adjustments in CAM workspace.
 
 **Acceptance Criteria**:
 - Generate joints using nominal sheet thickness in Design
@@ -73,7 +73,7 @@ The add-in SHALL support material thickness adjustments in CAM workspace.
 ### FR-005: CNC Router Dogbone Integration
 **Priority**: Medium
 
-The add-in SHALL provide intelligent dogbone placement for CNC router compatibility.
+The add-in MUST provide intelligent dogbone placement for CNC router compatibility.
 
 **Design Module Requirements**:
 - Tag corner types: CriticalSharp, BestEffort, Decorative
@@ -91,7 +91,7 @@ The add-in SHALL provide intelligent dogbone placement for CNC router compatibil
 ### UI-001: Selection Workflows
 **Priority**: High
 
-The add-in SHALL provide intuitive selection methods following Fusion patterns.
+The add-in MUST provide intuitive selection methods following Fusion patterns.
 
 **Default Workflow - Auto-Detection**:
 - "Process All Intersections" mode (default)
@@ -108,7 +108,7 @@ The add-in SHALL provide intuitive selection methods following Fusion patterns.
 ### UI-002: Parameter Configuration
 **Priority**: Medium
 
-The add-in SHALL provide comprehensive joint parameterization.
+The add-in MUST provide comprehensive joint parameterization.
 
 **Global Settings Panel**:
 - Material type presets (Plywood, MDF, Hardwood, Custom)
@@ -134,7 +134,7 @@ The add-in SHALL provide comprehensive joint parameterization.
 ### UI-003: Override and Editing
 **Priority**: Medium
 
-The add-in SHALL support manual overrides following Fusion editing patterns.
+The add-in MUST support manual overrides following Fusion editing patterns.
 
 **Timeline-Based Editing**:
 - Right-click Custom Feature → "Edit Joinery Feature"
@@ -153,7 +153,7 @@ The add-in SHALL support manual overrides following Fusion editing patterns.
 ### TA-001: API Integration
 **Priority**: High
 
-The add-in SHALL leverage appropriate Fusion 360 APIs.
+The add-in MUST leverage appropriate Fusion 360 APIs.
 
 **Design Module APIs**:
 - `adsk.fusion.CustomFeature` for parametric timeline integration
@@ -169,14 +169,14 @@ The add-in SHALL leverage appropriate Fusion 360 APIs.
 ### TA-002: Data Architecture
 **Priority**: High
 
-The add-in SHALL implement robust data management.
+The add-in MUST implement robust data management.
 
 **Metadata System**:
 ```python
 # Joint metadata example
 face.attributes.add('JoineryAddin', 'JointType', 'FingerJoint')
 face.attributes.add('JoineryAddin', 'DogboneHint', 'CornerDogbone')
-face.attributes.add('JoineryAddin', 'MaterialThickness', '0.75')
+face.attributes.add('JoineryAddin', 'MaterialThickness', '9.0')
 face.attributes.add('JoineryAddin', 'ToleranceClass', 'Precision')
 ```
 
@@ -186,10 +186,27 @@ face.attributes.add('JoineryAddin', 'ToleranceClass', 'Precision')
 - Memory-efficient attribute storage
 - Cached geometry analysis results
 
-### TA-003: Error Handling
+### TA-003: Platform Compatibility
+**Priority**: High
+
+The add-in MUST support all platforms where Fusion 360 is available.
+
+**Supported Platforms**:
+- **Windows 10/11** - Full functionality and testing
+- **macOS** (Intel and Apple Silicon) - Full functionality and testing
+- Platform-agnostic Python implementation using Fusion 360 API
+- Consistent user experience across platforms
+
+**Platform Requirements**:
+- No platform-specific dependencies or libraries
+- File path handling compatible with Windows and macOS conventions
+- User preferences storage using Fusion's cross-platform settings system
+- Installation packages for both platforms
+
+### TA-004: Error Handling
 **Priority**: Medium
 
-The add-in SHALL implement robust error handling following Fusion patterns.
+The add-in MUST implement robust error handling following Fusion patterns.
 
 **Error Scenarios**:
 - Material too thin for selected joint type
@@ -208,7 +225,7 @@ The add-in SHALL implement robust error handling following Fusion patterns.
 ### MR-001: Material Support
 **Priority**: High
 
-The add-in SHALL support common sheet goods materials.
+The add-in MUST support common sheet goods materials.
 
 **Supported Materials**:
 - Plywood (various grades and species)
@@ -217,21 +234,21 @@ The add-in SHALL support common sheet goods materials.
 - Material-agnostic design principles
 
 **Thickness Range**:
-- Minimum: 1/8" (3.175mm)
-- Maximum: 3/4" (19.05mm)
-- Support for both imperial and metric units
-- Auto-detection from Fusion user preferences
+- **Tested Range**: 2mm to 20mm (approximately 1 order of magnitude)
+- **Supported Range**: No artificial limits - leverages sheet metal properties
+- **Outside Tested Range**: Add-in SHOULD function but with user warning
+- **Units Support**: Both imperial and metric units with Fusion user preference detection
 
 ### MR-002: Manufacturing Integration
 **Priority**: High
 
-The add-in SHALL support CNC router manufacturing workflows.
+The add-in MUST support CNC router manufacturing workflows.
 
 **CNC Compatibility**:
 - 3-axis router toolpath compatibility
 - Dogbone corner relief for sharp internal corners
 - Tool diameter considerations for clearances
-- Standard end mill compatibility (1/8", 1/4", 3/8", 1/2")
+- Standard end mill compatibility (3.175mm, 6.35mm, 9.525mm, 12.7mm)
 
 **Tolerance Management**:
 - Configurable clearance values (default: 0.1mm)
@@ -244,7 +261,7 @@ The add-in SHALL support CNC router manufacturing workflows.
 ### QR-001: Accuracy
 **Priority**: High
 
-The add-in SHALL maintain high geometric accuracy.
+The add-in MUST maintain high geometric accuracy.
 
 **Precision Requirements**:
 - Joint dimensional accuracy: ±0.05mm
@@ -255,7 +272,7 @@ The add-in SHALL maintain high geometric accuracy.
 ### QR-002: Performance
 **Priority**: Medium
 
-The add-in SHALL meet performance benchmarks.
+The add-in MUST meet performance benchmarks.
 
 **Performance Targets**:
 - Process 100 intersections: <10 seconds
@@ -266,7 +283,7 @@ The add-in SHALL meet performance benchmarks.
 ### QR-003: Usability
 **Priority**: High
 
-The add-in SHALL provide excellent user experience.
+The add-in MUST provide excellent user experience.
 
 **Usability Requirements**:
 - Intuitive workflow following Fusion patterns
@@ -298,6 +315,7 @@ The add-in SHALL provide excellent user experience.
 - Multi-material support
 - Cloud-based joint library
 - Integration with Fusion's Generative Design
+- **Material-Aware Cutting Direction Intelligence**: Validate/enforce conventional milling for wood/anisotropic materials and climb milling for metals/isotropic materials based on `sidewaysCompensation` parameter analysis
 
 ### API Dependencies
 - Monitor Custom Features API evolution (currently preview)

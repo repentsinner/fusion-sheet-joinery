@@ -11,7 +11,7 @@ This add-in automatically detects intersecting sheet bodies and generates approp
 - **Automatic Joint Detection**: Scans assemblies for sheet intersections and suggests optimal joint types
 - **Parametric Integration**: Uses Fusion's Custom Features API for timeline integration and automatic regeneration
 - **CNC Router Ready**: Intelligent dogbone placement with Design-to-CAM metadata flow
-- **Material Flexibility**: Supports plywood, MDF, and composite sheets (1/8" to 3/4")
+- **Material Flexibility**: Supports plywood, MDF, and composite sheets (tested 2-20mm range)
 - **Manufacturing Workflow**: Nominal dimensions in Design, measured stock adjustments in CAM
 
 ## Installation
