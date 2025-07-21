@@ -650,8 +650,8 @@ def create_join_sheets_feature(design, selected_bodies, tab_width, tolerance):
         custom_feature_input = custom_features.createInput(custom_feature_definition)
         
         # Add dependencies on the selected bodies
-        for body in selected_bodies:
-            custom_feature_input.addDependency(body)
+        for i, body in enumerate(selected_bodies):
+            custom_feature_input.addDependency(f"body_{i}", body)
         
         custom_feature = custom_features.add(custom_feature_input)
 
