@@ -90,15 +90,25 @@ def create_intersection_body_in_timeline(target_body, tool_body):
         # Create combine input for intersection operation
         combine_input = combine_features.createInput(target_body, tool_bodies)
         combine_input.operation = adsk.fusion.FeatureOperations.IntersectFeatureOperation
-        combine_input.isKeepToolBodies = True  # Keep original bodies
+        combine_input.isKeepToolBodies = True  # Keep original tool bodies
+        combine_input.isNewComponent = False  # Keep in same component
         
         # Execute the combine operation in timeline
         combine_feature = combine_features.add(combine_input)
         
-        # Get the resulting intersection body
+        # Get the resulting intersection body and ensure it's visible
         if combine_feature.bodies and combine_feature.bodies.count > 0:
             intersection_body = combine_feature.bodies.item(0)
+            
+            # Ensure the body is visible in the browser
+            intersection_body.isVisible = True
+            
+            # Log detailed information about the created body
             futil.log(f"Created intersection body in timeline between {target_body.name} and {tool_body.name}")
+            futil.log(f"Intersection body name: {intersection_body.name}")
+            futil.log(f"Intersection body visible: {intersection_body.isVisible}")
+            futil.log(f"Intersection body volume: {intersection_body.volume*1000:.3f} cm³")
+            
             return intersection_body
         else:
             futil.log("No intersection body created - bodies do not intersect")
