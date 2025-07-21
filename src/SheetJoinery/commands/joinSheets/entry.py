@@ -66,56 +66,41 @@ def get_sheet_metal_thickness(body):
         return None
 
 
-def create_intersection_body_in_timeline(target_body, tool_body):
+def create_intersection_body_temporary(target_body, tool_body):
     """
-    Create intersection body between two sheet metal bodies using Combine + Intersect.
-    This version works within the Custom Feature timeline context.
+    Create intersection body using TemporaryBRepManager for internal Custom Feature operations.
+    This keeps all operations internal without creating timeline features.
     Returns the intersection BRepBody or None if no intersection exists.
     """
     try:
-        # Get the design and root component
-        app = adsk.core.Application.get()
-        design = app.activeProduct
-        if not design:
-            futil.log("ERROR: No active design found")
-            return None
-            
-        root_component = design.rootComponent
-        combine_features = root_component.features.combineFeatures
+        # Get the TemporaryBRepManager
+        temp_brep_mgr = adsk.fusion.TemporaryBRepManager.get()
         
-        # Create collection of tool bodies (bodies to intersect with target)
-        tool_bodies = adsk.core.ObjectCollection.create()
-        tool_bodies.add(tool_body)
+        # Create copies of both bodies for safe manipulation
+        target_copy = temp_brep_mgr.copy(target_body)
+        tool_copy = temp_brep_mgr.copy(tool_body)
         
-        # Create combine input for intersection operation
-        combine_input = combine_features.createInput(target_body, tool_bodies)
-        combine_input.operation = adsk.fusion.FeatureOperations.IntersectFeatureOperation
-        combine_input.isKeepToolBodies = True  # Keep original tool bodies
-        combine_input.isNewComponent = False  # Keep in same component
+        futil.log(f"Created temporary copies of {target_body.name} and {tool_body.name}")
         
-        # Execute the combine operation in timeline
-        combine_feature = combine_features.add(combine_input)
+        # Perform intersection operation using temporary BRep
+        intersection_body = temp_brep_mgr.booleanOperation(
+            target_copy, 
+            tool_copy, 
+            adsk.fusion.BooleanTypes.IntersectionBooleanType
+        )
         
-        # Get the resulting intersection body and ensure it's visible
-        if combine_feature.bodies and combine_feature.bodies.count > 0:
-            intersection_body = combine_feature.bodies.item(0)
-            
-            # Ensure the body is visible in the browser
-            intersection_body.isVisible = True
-            
-            # Log detailed information about the created body
-            futil.log(f"Created intersection body in timeline between {target_body.name} and {tool_body.name}")
-            futil.log(f"Intersection body name: {intersection_body.name}")
-            futil.log(f"Intersection body visible: {intersection_body.isVisible}")
+        if intersection_body:
+            # Log detailed information about the intersection
+            futil.log(f"Created temporary intersection body between {target_body.name} and {tool_body.name}")
             futil.log(f"Intersection body volume: {intersection_body.volume*1000:.3f} cm³")
             
             return intersection_body
         else:
-            futil.log("No intersection body created - bodies do not intersect")
+            futil.log("No intersection found between bodies")
             return None
             
     except Exception as e:
-        futil.log(f"Error creating intersection body in timeline: {e!s}")
+        futil.log(f"Error creating temporary intersection body: {e!s}")
         return None
 
 
@@ -816,9 +801,9 @@ def compute_join_sheets_feature(args):
         futil.log(f"Found {len(bodies)} bodies in dependencies")
 
         if len(bodies) >= 2:
-            # Create intersection body using Combine + Intersect operation
-            futil.log(f"Creating intersection between {len(bodies)} bodies")
-            intersection_body = create_intersection_body_in_timeline(bodies[0], bodies[1])
+            # Create intersection body using TemporaryBRepManager (internal to Custom Feature)
+            futil.log(f"Creating temporary intersection between {len(bodies)} bodies")
+            intersection_body = create_intersection_body_temporary(bodies[0], bodies[1])
             
             if not intersection_body:
                 futil.log("No intersection found between bodies - cannot create joint")
@@ -837,11 +822,12 @@ def compute_join_sheets_feature(args):
             futil.log(f"Valid intersection found: {intersection_info['description']}")
             futil.log(f"Intersection volume: {intersection_body.volume*1000:.2f} cm³")
             
-            # TODO: Slice intersection body into segments for alternating tabs/slots
+            # TODO: Create persistent geometry for final joinery result
+            # TODO: Slice intersection body into segments for alternating tabs/slots  
             # TODO: Create tabs on one body and slots on the other using boolean operations
             # TODO: Apply tolerance adjustments and material-aware sizing
             
-            futil.log("Intersection detection completed successfully in timeline")
+            futil.log("Temporary intersection analysis completed successfully")
             args.isComputed = True
         else:
             futil.log("ERROR: Need at least 2 bodies to generate joints")
