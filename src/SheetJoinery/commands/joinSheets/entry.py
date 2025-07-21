@@ -316,8 +316,26 @@ def command_validate_input(args: adsk.core.ValidateInputsEventArgs):
             body = adsk.fusion.BRepBody.cast(body_selection.selection(i).entity)
             # Selection handler guarantees this is a sheet metal body with isSheetMetal = True
             if body and body.isSheetMetal:
-                # Calculate thickness from body geometry (API doesn't expose sheetMetalProperties)
-                thickness = calculate_sheet_metal_thickness(body)
+                # Try to get thickness from sheetMetalModel property
+                thickness = None
+                try:
+                    if hasattr(body, 'sheetMetalModel') and body.sheetMetalModel:
+                        if hasattr(body.sheetMetalModel, 'thickness') and body.sheetMetalModel.thickness:
+                            thickness = body.sheetMetalModel.thickness.value
+                            futil.log(f"Body {i+1} direct thickness from sheetMetalModel: {thickness*10:.2f}mm")
+                        else:
+                            futil.log(f"Body {i+1} has sheetMetalModel but no thickness property")
+                    else:
+                        futil.log(f"Body {i+1} has no sheetMetalModel property")
+                except Exception as e:
+                    futil.log(f"Body {i+1} error accessing sheetMetalModel: {e!s}")
+                
+                # Fallback to geometric calculation if needed
+                if not thickness:
+                    thickness = calculate_sheet_metal_thickness(body)
+                    futil.log(f"Body {i+1} fallback geometric thickness: {thickness*10:.2f}mm")
+                
+                # Check thickness range
                 if thickness and (thickness < 0.2 or thickness > 2.0):  # 2mm to 20mm in cm
                     thickness_warnings.append(f"Body {i+1}: {thickness*10:.1f}mm thickness outside tested range (2-20mm)")
                 
@@ -734,13 +752,30 @@ def generate_single_intersection_joint(body1, body2, tab_width, tolerance):
                 futil.log(f"ERROR: Body {i} lost sheet metal classification during processing")
                 return False
                 
-            # Calculate thickness from geometry (API doesn't expose sheetMetalProperties)
-            thickness = calculate_sheet_metal_thickness(sheet_body)
+            # Try to get thickness from sheetMetalModel property first
+            thickness = None
+            try:
+                if hasattr(sheet_body, 'sheetMetalModel') and sheet_body.sheetMetalModel:
+                    if hasattr(sheet_body.sheetMetalModel, 'thickness') and sheet_body.sheetMetalModel.thickness:
+                        thickness = sheet_body.sheetMetalModel.thickness.value
+                        futil.log(f"Body {i} direct thickness from sheetMetalModel: {thickness*10:.2f}mm")
+                    else:
+                        futil.log(f"Body {i} has sheetMetalModel but no thickness property")
+                else:
+                    futil.log(f"Body {i} has no sheetMetalModel property")
+            except Exception as e:
+                futil.log(f"Body {i} error accessing sheetMetalModel: {e!s}")
+            
+            # Fallback to geometric calculation if needed
+            if not thickness:
+                thickness = calculate_sheet_metal_thickness(sheet_body)
+                futil.log(f"Body {i} fallback geometric thickness: {thickness*10:.2f}mm")
+            
             if not thickness:
                 futil.log(f"ERROR: Could not determine thickness for Body {i}")
                 return False
                 
-            futil.log(f"Body {i} thickness: {thickness*10:.2f}mm")
+            futil.log(f"Body {i} final thickness: {thickness*10:.2f}mm")
             
             # Warn if outside tested range but continue processing
             if thickness < 0.2 or thickness > 2.0:  # 2mm to 20mm in cm
