@@ -650,8 +650,8 @@ def create_join_sheets_feature(design, selected_bodies, tab_width, tolerance):
         custom_feature_input = custom_features.createInput(custom_feature_definition)
         
         # Add dependencies on the selected bodies
-        for i, body in enumerate(selected_bodies):
-            custom_feature_input.addDependency(f"body_{i}", body)
+        for body in selected_bodies:
+            custom_feature_input.addDependency(body)
         
         custom_feature = custom_features.add(custom_feature_input)
 
@@ -789,17 +789,17 @@ def compute_join_sheets_feature(args):
             args.isComputed = True  # Don't fail, just warn
             return
 
-        # Collect the dependent bodies by parameter name
+        # Collect the dependent bodies
         bodies = []
         
         for i in range(dependencies.count):
             dependency = dependencies.item(i)
-            param_name = dependency.parameter
             entity = dependency.entity
             
-            futil.log(f"Processing dependency: {param_name}")
+            futil.log(f"Processing dependency {i}: {entity.objectType}")
             
-            if param_name.startswith("body_"):
+            # All dependencies should be bodies since we only added bodies
+            if entity.objectType == adsk.fusion.BRepBody.classType():
                 bodies.append(entity)
 
         futil.log(f"Found {len(bodies)} bodies in dependencies")
