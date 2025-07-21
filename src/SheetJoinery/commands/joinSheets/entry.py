@@ -66,6 +66,105 @@ def get_sheet_metal_thickness(body):
         return None
 
 
+def create_intersection_body(target_body, tool_body):
+    """
+    Create intersection body between two sheet metal bodies using Combine + Intersect.
+    Returns the intersection BRepBody or None if no intersection exists.
+    """
+    try:
+        # Get the design and root component
+        app = adsk.core.Application.get()
+        design = app.activeProduct
+        if not design:
+            futil.log("ERROR: No active design found")
+            return None
+            
+        root_component = design.rootComponent
+        combine_features = root_component.features.combineFeatures
+        
+        # Create collection of tool bodies (bodies to intersect with target)
+        tool_bodies = adsk.core.ObjectCollection.create()
+        tool_bodies.add(tool_body)
+        
+        # Create combine input for intersection operation
+        combine_input = combine_features.createInput(target_body, tool_bodies)
+        combine_input.operation = adsk.fusion.FeatureOperations.IntersectFeatureOperation
+        combine_input.isKeepToolBodies = True  # Keep original bodies
+        
+        # Execute the combine operation
+        combine_feature = combine_features.add(combine_input)
+        
+        # Get the resulting intersection body
+        if combine_feature.bodies and combine_feature.bodies.count > 0:
+            intersection_body = combine_feature.bodies.item(0)
+            futil.log(f"Successfully created intersection body between {target_body.name} and {tool_body.name}")
+            return intersection_body
+        else:
+            futil.log("No intersection body created - bodies do not intersect")
+            return None
+            
+    except Exception as e:
+        futil.log(f"Error creating intersection body: {e!s}")
+        return None
+
+
+def analyze_intersection_geometry(intersection_body, sheet_thickness):
+    """
+    Analyze intersection body geometry to determine joint type and suitability.
+    Returns dictionary with intersection analysis or None if unsuitable.
+    """
+    try:
+        # Basic geometry validation
+        volume = intersection_body.volume
+        area = intersection_body.area
+        bbox = intersection_body.boundingBox
+        
+        # Calculate intersection dimensions
+        width = bbox.maxPoint.x - bbox.minPoint.x
+        height = bbox.maxPoint.y - bbox.minPoint.y
+        depth = bbox.maxPoint.z - bbox.minPoint.z
+        
+        # Minimum volume check (must be meaningful intersection)
+        min_volume = sheet_thickness * sheet_thickness * sheet_thickness * 0.1  # 10% of a cubic thickness
+        if volume < min_volume:
+            futil.log(f"Intersection too small: {volume*1000:.3f} cm³ < {min_volume*1000:.3f} cm³")
+            return None
+        
+        # Determine intersection type based on geometry
+        dimensions = sorted([width, height, depth], reverse=True)
+        longest_dim = dimensions[0]
+        middle_dim = dimensions[1] 
+        shortest_dim = dimensions[2]
+        
+        # Classify intersection type
+        if shortest_dim > sheet_thickness * 0.5:
+            joint_type = "cross-joint"  # Bodies cross through each other
+            description = f"Cross joint: {longest_dim*10:.1f} x {middle_dim*10:.1f} x {shortest_dim*10:.1f} mm"
+        elif middle_dim > longest_dim * 0.1:
+            joint_type = "t-joint"  # One body intersects perpendicularly 
+            description = f"T-joint: {longest_dim*10:.1f} x {middle_dim*10:.1f} mm intersection"
+        else:
+            joint_type = "edge-joint"  # Edge-to-edge contact
+            description = f"Edge joint: {longest_dim*10:.1f} mm length"
+        
+        return {
+            'type': joint_type,
+            'description': description,
+            'dimensions': {
+                'width': width,
+                'height': height, 
+                'depth': depth,
+                'volume': volume,
+                'area': area
+            },
+            'suitable_for_tabs': longest_dim > sheet_thickness * 3  # Need minimum length for tabs
+        }
+        
+    except Exception as e:
+        futil.log(f"Error analyzing intersection geometry: {e!s}")
+        return None
+
+
 
 # Global custom feature definition - created once when add-in loads
 custom_feature_definition = None
@@ -744,14 +843,26 @@ def generate_single_intersection_joint(body1, body2, tab_width, tolerance):
             if thickness < 0.2 or thickness > 2.0:  # 2mm to 20mm in cm
                 futil.log(f"WARNING: Body {i} thickness {thickness*10:.1f}mm outside tested range (2-20mm)")
         
-        # TODO: Implement actual intersection detection and joint generation
-        # This is where the core sheet joinery algorithms would go:
-        # - BRep intersection analysis using sheet metal face hierarchy
-        # - Leverage sheetMetalProperties.thickness for accurate joint sizing
-        # - Tab and slot profile generation with material-aware tolerances
-        # - Consider bend radius from sheet metal properties
+        # Create intersection body using Combine + Intersect operation
+        intersection_body = create_intersection_body(sheet_body, bodies[1])
+        if not intersection_body:
+            futil.log("No intersection found between bodies - cannot create joint")
+            return False
+            
+        # Validate intersection geometry
+        intersection_info = analyze_intersection_geometry(intersection_body, thickness)
+        if not intersection_info:
+            futil.log("Intersection geometry is not suitable for joinery")
+            return False
+            
+        futil.log(f"Valid intersection found: {intersection_info['description']}")
+        futil.log(f"Intersection volume: {intersection_body.volume*1000:.2f} cm³")
         
-        futil.log("Joint generation placeholder completed successfully")
+        # TODO: Slice intersection body into segments for alternating tabs/slots
+        # TODO: Create tabs on one body and slots on the other using boolean operations
+        # TODO: Apply tolerance adjustments and material-aware sizing
+        
+        futil.log("Intersection detection completed successfully")
         return True
         
     except Exception as e:
