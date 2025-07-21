@@ -66,9 +66,10 @@ def get_sheet_metal_thickness(body):
         return None
 
 
-def create_intersection_body(target_body, tool_body):
+def create_intersection_body_in_timeline(target_body, tool_body):
     """
     Create intersection body between two sheet metal bodies using Combine + Intersect.
+    This version works within the Custom Feature timeline context.
     Returns the intersection BRepBody or None if no intersection exists.
     """
     try:
@@ -91,20 +92,20 @@ def create_intersection_body(target_body, tool_body):
         combine_input.operation = adsk.fusion.FeatureOperations.IntersectFeatureOperation
         combine_input.isKeepToolBodies = True  # Keep original bodies
         
-        # Execute the combine operation
+        # Execute the combine operation in timeline
         combine_feature = combine_features.add(combine_input)
         
         # Get the resulting intersection body
         if combine_feature.bodies and combine_feature.bodies.count > 0:
             intersection_body = combine_feature.bodies.item(0)
-            futil.log(f"Successfully created intersection body between {target_body.name} and {tool_body.name}")
+            futil.log(f"Created intersection body in timeline between {target_body.name} and {tool_body.name}")
             return intersection_body
         else:
             futil.log("No intersection body created - bodies do not intersect")
             return None
             
     except Exception as e:
-        futil.log(f"Error creating intersection body: {e!s}")
+        futil.log(f"Error creating intersection body in timeline: {e!s}")
         return None
 
 
@@ -805,10 +806,33 @@ def compute_join_sheets_feature(args):
         futil.log(f"Found {len(bodies)} bodies in dependencies")
 
         if len(bodies) >= 2:
-            # Generate slot-and-tab joints between the first two bodies
-            futil.log(f"Generating joint between {len(bodies)} bodies")
-            success = generate_single_intersection_joint(bodies[0], bodies[1], tab_width, tolerance)
-            args.isComputed = success
+            # Create intersection body using Combine + Intersect operation
+            futil.log(f"Creating intersection between {len(bodies)} bodies")
+            intersection_body = create_intersection_body_in_timeline(bodies[0], bodies[1])
+            
+            if not intersection_body:
+                futil.log("No intersection found between bodies - cannot create joint")
+                args.isComputed = False
+                return
+                
+            # Analyze intersection geometry
+            thickness = get_sheet_metal_thickness(bodies[0])  # Use first body's thickness
+            intersection_info = analyze_intersection_geometry(intersection_body, thickness)
+            
+            if not intersection_info:
+                futil.log("Intersection geometry is not suitable for joinery")
+                args.isComputed = False
+                return
+                
+            futil.log(f"Valid intersection found: {intersection_info['description']}")
+            futil.log(f"Intersection volume: {intersection_body.volume*1000:.2f} cm³")
+            
+            # TODO: Slice intersection body into segments for alternating tabs/slots
+            # TODO: Create tabs on one body and slots on the other using boolean operations
+            # TODO: Apply tolerance adjustments and material-aware sizing
+            
+            futil.log("Intersection detection completed successfully in timeline")
+            args.isComputed = True
         else:
             futil.log("ERROR: Need at least 2 bodies to generate joints")
             args.isComputed = False
@@ -848,26 +872,10 @@ def generate_single_intersection_joint(body1, body2, tab_width, tolerance):
             if thickness < 0.2 or thickness > 2.0:  # 2mm to 20mm in cm
                 futil.log(f"WARNING: Body {i} thickness {thickness*10:.1f}mm outside tested range (2-20mm)")
         
-        # Create intersection body using Combine + Intersect operation
-        intersection_body = create_intersection_body(body1, body2)
-        if not intersection_body:
-            futil.log("No intersection found between bodies - cannot create joint")
-            return False
-            
-        # Validate intersection geometry
-        intersection_info = analyze_intersection_geometry(intersection_body, thickness)
-        if not intersection_info:
-            futil.log("Intersection geometry is not suitable for joinery")
-            return False
-            
-        futil.log(f"Valid intersection found: {intersection_info['description']}")
-        futil.log(f"Intersection volume: {intersection_body.volume*1000:.2f} cm³")
+        # This function now only validates sheet metal bodies
+        # Intersection creation moved to compute handler for proper timeline integration
         
-        # TODO: Slice intersection body into segments for alternating tabs/slots
-        # TODO: Create tabs on one body and slots on the other using boolean operations
-        # TODO: Apply tolerance adjustments and material-aware sizing
-        
-        futil.log("Intersection detection completed successfully")
+        futil.log("Sheet metal body validation completed successfully")
         return True
         
     except Exception as e:
