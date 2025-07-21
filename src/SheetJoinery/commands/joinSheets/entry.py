@@ -316,19 +316,28 @@ def command_validate_input(args: adsk.core.ValidateInputsEventArgs):
             body = adsk.fusion.BRepBody.cast(body_selection.selection(i).entity)
             # Selection handler guarantees this is a sheet metal body with isSheetMetal = True
             if body and body.isSheetMetal:
-                # Try to get thickness from sheetMetalModel property
+                # Try to get thickness from parent component's activeSheetMetalRule
                 thickness = None
                 try:
-                    if hasattr(body, 'sheetMetalModel') and body.sheetMetalModel:
-                        if hasattr(body.sheetMetalModel, 'thickness') and body.sheetMetalModel.thickness:
-                            thickness = body.sheetMetalModel.thickness.value
-                            futil.log(f"Body {i+1} direct thickness from sheetMetalModel: {thickness*10:.2f}mm")
+                    if hasattr(body, 'parentComponent') and body.parentComponent:
+                        component = body.parentComponent
+                        futil.log(f"Body {i+1} has parentComponent: {component.name}")
+                        
+                        if hasattr(component, 'activeSheetMetalRule') and component.activeSheetMetalRule:
+                            rule = component.activeSheetMetalRule
+                            futil.log(f"Body {i+1} component has activeSheetMetalRule: {rule.name}")
+                            
+                            if hasattr(rule, 'thickness') and rule.thickness:
+                                thickness = rule.thickness.value
+                                futil.log(f"Body {i+1} thickness from activeSheetMetalRule: {thickness*10:.2f}mm")
+                            else:
+                                futil.log(f"Body {i+1} activeSheetMetalRule has no thickness property")
                         else:
-                            futil.log(f"Body {i+1} has sheetMetalModel but no thickness property")
+                            futil.log(f"Body {i+1} component has no activeSheetMetalRule")
                     else:
-                        futil.log(f"Body {i+1} has no sheetMetalModel property")
+                        futil.log(f"Body {i+1} has no parentComponent")
                 except Exception as e:
-                    futil.log(f"Body {i+1} error accessing sheetMetalModel: {e!s}")
+                    futil.log(f"Body {i+1} error accessing parentComponent/activeSheetMetalRule: {e!s}")
                 
                 # Fallback to geometric calculation if needed
                 if not thickness:
@@ -752,19 +761,28 @@ def generate_single_intersection_joint(body1, body2, tab_width, tolerance):
                 futil.log(f"ERROR: Body {i} lost sheet metal classification during processing")
                 return False
                 
-            # Try to get thickness from sheetMetalModel property first
+            # Try to get thickness from parent component's activeSheetMetalRule
             thickness = None
             try:
-                if hasattr(sheet_body, 'sheetMetalModel') and sheet_body.sheetMetalModel:
-                    if hasattr(sheet_body.sheetMetalModel, 'thickness') and sheet_body.sheetMetalModel.thickness:
-                        thickness = sheet_body.sheetMetalModel.thickness.value
-                        futil.log(f"Body {i} direct thickness from sheetMetalModel: {thickness*10:.2f}mm")
+                if hasattr(sheet_body, 'parentComponent') and sheet_body.parentComponent:
+                    component = sheet_body.parentComponent
+                    futil.log(f"Body {i} has parentComponent: {component.name}")
+                    
+                    if hasattr(component, 'activeSheetMetalRule') and component.activeSheetMetalRule:
+                        rule = component.activeSheetMetalRule
+                        futil.log(f"Body {i} component has activeSheetMetalRule: {rule.name}")
+                        
+                        if hasattr(rule, 'thickness') and rule.thickness:
+                            thickness = rule.thickness.value
+                            futil.log(f"Body {i} thickness from activeSheetMetalRule: {thickness*10:.2f}mm")
+                        else:
+                            futil.log(f"Body {i} activeSheetMetalRule has no thickness property")
                     else:
-                        futil.log(f"Body {i} has sheetMetalModel but no thickness property")
+                        futil.log(f"Body {i} component has no activeSheetMetalRule")
                 else:
-                    futil.log(f"Body {i} has no sheetMetalModel property")
+                    futil.log(f"Body {i} has no parentComponent")
             except Exception as e:
-                futil.log(f"Body {i} error accessing sheetMetalModel: {e!s}")
+                futil.log(f"Body {i} error accessing parentComponent/activeSheetMetalRule: {e!s}")
             
             # Fallback to geometric calculation if needed
             if not thickness:
