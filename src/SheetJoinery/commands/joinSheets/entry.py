@@ -39,28 +39,30 @@ ICON_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resource
 local_handlers = []
 
 
-def calculate_sheet_metal_thickness(body):
+def get_sheet_metal_thickness(body):
     """
-    Calculate sheet metal thickness by analyzing the body geometry.
+    Get sheet metal thickness from the body's parent component sheet metal rule.
+    Falls back to geometric calculation if rule access fails.
     Returns thickness in cm (Fusion's internal units).
     """
     try:
-        # Get the bounding box
-        bbox = body.boundingBox
+        # Try to get thickness from parent component's activeSheetMetalRule
+        if hasattr(body, 'parentComponent') and body.parentComponent:
+            component = body.parentComponent
+            if hasattr(component, 'activeSheetMetalRule') and component.activeSheetMetalRule:
+                rule = component.activeSheetMetalRule
+                if hasattr(rule, 'thickness') and rule.thickness:
+                    return rule.thickness.value
         
-        # Calculate the three dimensions
+        # Fallback: calculate from geometry using bounding box
+        bbox = body.boundingBox
         width = bbox.maxPoint.x - bbox.minPoint.x
         height = bbox.maxPoint.y - bbox.minPoint.y
         depth = bbox.maxPoint.z - bbox.minPoint.z
-        
-        # The thickness is typically the smallest dimension for sheet metal
-        thickness = min(width, height, depth)
-        
-        futil.log(f"Calculated thickness: {thickness*10:.2f}mm from dimensions: {width*10:.1f} x {height*10:.1f} x {depth*10:.1f}mm")
-        return thickness
+        return min(width, height, depth)
         
     except Exception as e:
-        futil.log(f"Error calculating sheet metal thickness: {e!s}")
+        futil.log(f"Error determining sheet metal thickness: {e!s}")
         return None
 
 
@@ -314,37 +316,8 @@ def command_validate_input(args: adsk.core.ValidateInputsEventArgs):
     if valid_selection:
         for i in range(body_selection.selectionCount):
             body = adsk.fusion.BRepBody.cast(body_selection.selection(i).entity)
-            # Selection handler guarantees this is a sheet metal body with isSheetMetal = True
             if body and body.isSheetMetal:
-                # Try to get thickness from parent component's activeSheetMetalRule
-                thickness = None
-                try:
-                    if hasattr(body, 'parentComponent') and body.parentComponent:
-                        component = body.parentComponent
-                        futil.log(f"Body {i+1} has parentComponent: {component.name}")
-                        
-                        if hasattr(component, 'activeSheetMetalRule') and component.activeSheetMetalRule:
-                            rule = component.activeSheetMetalRule
-                            futil.log(f"Body {i+1} component has activeSheetMetalRule: {rule.name}")
-                            
-                            if hasattr(rule, 'thickness') and rule.thickness:
-                                thickness = rule.thickness.value
-                                futil.log(f"Body {i+1} thickness from activeSheetMetalRule: {thickness*10:.2f}mm")
-                            else:
-                                futil.log(f"Body {i+1} activeSheetMetalRule has no thickness property")
-                        else:
-                            futil.log(f"Body {i+1} component has no activeSheetMetalRule")
-                    else:
-                        futil.log(f"Body {i+1} has no parentComponent")
-                except Exception as e:
-                    futil.log(f"Body {i+1} error accessing parentComponent/activeSheetMetalRule: {e!s}")
-                
-                # Fallback to geometric calculation if needed
-                if not thickness:
-                    thickness = calculate_sheet_metal_thickness(body)
-                    futil.log(f"Body {i+1} fallback geometric thickness: {thickness*10:.2f}mm")
-                
-                # Check thickness range
+                thickness = get_sheet_metal_thickness(body)
                 if thickness and (thickness < 0.2 or thickness > 2.0):  # 2mm to 20mm in cm
                     thickness_warnings.append(f"Body {i+1}: {thickness*10:.1f}mm thickness outside tested range (2-20mm)")
                 
@@ -761,39 +734,11 @@ def generate_single_intersection_joint(body1, body2, tab_width, tolerance):
                 futil.log(f"ERROR: Body {i} lost sheet metal classification during processing")
                 return False
                 
-            # Try to get thickness from parent component's activeSheetMetalRule
-            thickness = None
-            try:
-                if hasattr(sheet_body, 'parentComponent') and sheet_body.parentComponent:
-                    component = sheet_body.parentComponent
-                    futil.log(f"Body {i} has parentComponent: {component.name}")
-                    
-                    if hasattr(component, 'activeSheetMetalRule') and component.activeSheetMetalRule:
-                        rule = component.activeSheetMetalRule
-                        futil.log(f"Body {i} component has activeSheetMetalRule: {rule.name}")
-                        
-                        if hasattr(rule, 'thickness') and rule.thickness:
-                            thickness = rule.thickness.value
-                            futil.log(f"Body {i} thickness from activeSheetMetalRule: {thickness*10:.2f}mm")
-                        else:
-                            futil.log(f"Body {i} activeSheetMetalRule has no thickness property")
-                    else:
-                        futil.log(f"Body {i} component has no activeSheetMetalRule")
-                else:
-                    futil.log(f"Body {i} has no parentComponent")
-            except Exception as e:
-                futil.log(f"Body {i} error accessing parentComponent/activeSheetMetalRule: {e!s}")
-            
-            # Fallback to geometric calculation if needed
-            if not thickness:
-                thickness = calculate_sheet_metal_thickness(sheet_body)
-                futil.log(f"Body {i} fallback geometric thickness: {thickness*10:.2f}mm")
-            
+            # Get thickness from sheet metal rule or geometry
+            thickness = get_sheet_metal_thickness(sheet_body)
             if not thickness:
                 futil.log(f"ERROR: Could not determine thickness for Body {i}")
                 return False
-                
-            futil.log(f"Body {i} final thickness: {thickness*10:.2f}mm")
             
             # Warn if outside tested range but continue processing
             if thickness < 0.2 or thickness > 2.0:  # 2mm to 20mm in cm
