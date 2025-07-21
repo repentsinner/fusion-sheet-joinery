@@ -773,6 +773,7 @@ def compute_join_sheets_feature(args):
     """Compute handler for the Join Sheets custom feature"""
     try:
         custom_feature = args.customFeature
+        futil.log(f"=== COMPUTE HANDLER CALLED ===")
         futil.log(f"Computing Join Sheets feature: {custom_feature.name}")
 
         # Get stored parameters
@@ -805,6 +806,7 @@ def compute_join_sheets_feature(args):
 
         if len(bodies) >= 2:
             # Generate slot-and-tab joints between the first two bodies
+            futil.log(f"Generating joint between {len(bodies)} bodies")
             success = generate_single_intersection_joint(bodies[0], bodies[1], tab_width, tolerance)
             args.isComputed = success
         else:
@@ -819,7 +821,10 @@ def compute_join_sheets_feature(args):
 def generate_single_intersection_joint(body1, body2, tab_width, tolerance):
     """Generate slot-and-tab joint between two sheet bodies"""
     try:
-        futil.log(f"Generating joint between body1 and body2 with tab_width={tab_width}, tolerance={tolerance}")
+        futil.log(f"=== STARTING JOINT GENERATION ===")
+        futil.log(f"Body1: {body1.name if hasattr(body1, 'name') else 'unnamed'}")
+        futil.log(f"Body2: {body2.name if hasattr(body2, 'name') else 'unnamed'}")
+        futil.log(f"Tab width: {tab_width*10:.1f}mm, Tolerance: {tolerance*10:.1f}mm")
         
         # Selection handler guarantees these are sheet metal bodies
         for i, body in enumerate([body1, body2], 1):
@@ -844,7 +849,7 @@ def generate_single_intersection_joint(body1, body2, tab_width, tolerance):
                 futil.log(f"WARNING: Body {i} thickness {thickness*10:.1f}mm outside tested range (2-20mm)")
         
         # Create intersection body using Combine + Intersect operation
-        intersection_body = create_intersection_body(sheet_body, bodies[1])
+        intersection_body = create_intersection_body(body1, body2)
         if not intersection_body:
             futil.log("No intersection found between bodies - cannot create joint")
             return False
