@@ -83,18 +83,19 @@ def create_intersection_body_temporary(target_body, tool_body):
         futil.log(f"Created temporary copies of {target_body.name} and {tool_body.name}")
         
         # Perform intersection operation using temporary BRep
-        intersection_body = temp_brep_mgr.booleanOperation(
+        # booleanOperation modifies target_copy in-place and returns boolean success
+        operation_success = temp_brep_mgr.booleanOperation(
             target_copy, 
             tool_copy, 
             adsk.fusion.BooleanTypes.IntersectionBooleanType
         )
         
-        if intersection_body:
+        if operation_success and target_copy.volume > 0:
             # Log detailed information about the intersection
             futil.log(f"Created temporary intersection body between {target_body.name} and {tool_body.name}")
-            futil.log(f"Intersection body volume: {intersection_body.volume*1000:.3f} cm³")
+            futil.log(f"Intersection body volume: {target_copy.volume*1000:.3f} cm³")
             
-            return intersection_body
+            return target_copy
         else:
             futil.log("No intersection found between bodies")
             return None
