@@ -19,7 +19,9 @@
       "Bash(git commit:*)",
       "Bash(mv:*)",
       "Bash(uuidgen)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(git restore:*)",
+      "WebFetch(domain:ekinssolutions.com)"
     ],
     "deny": []
   }

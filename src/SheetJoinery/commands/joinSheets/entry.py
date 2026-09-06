@@ -634,30 +634,30 @@ def create_custom_feature_definition():
 
 
 def create_join_sheets_feature(design, selected_bodies, tab_width, tolerance):
-    """Create a Join Sheets custom feature instance in the timeline"""
+    """Create a Join Sheets custom feature instance in the timeline."""
     try:
         if not custom_feature_definition:
             raise Exception("CustomFeatureDefinition not initialized")
 
-        # Get the root component
+        # Get the root component's custom feature collection
         root_comp = design.rootComponent
         custom_features = root_comp.features.customFeatures
 
-        # Create the custom feature input using the pre-created definition
+        # Create the custom feature input object
         custom_feature_input = custom_features.createInput(custom_feature_definition)
         
-        # Add dependencies on the selected bodies
+        # Add dependencies on the selected bodies. The compute handler will use these.
         for i, body in enumerate(selected_bodies):
+            # Using a simple name for the dependency link
             custom_feature_input.addDependency(f"body_{i}", body)
         
+        # Create the feature. This action will trigger the first compute.
         custom_feature = custom_features.add(custom_feature_input)
 
-        # Store the parameters in the feature for later retrieval
+        # Store the parameters in the feature's attributes for the compute handler to retrieve
         store_feature_parameters(custom_feature, selected_bodies, tab_width, tolerance)
 
-        futil.log(
-            f"Successfully created Join Sheets custom feature: {custom_feature.name}"
-        )
+        futil.log(f"Successfully created Join Sheets custom feature: {custom_feature.name}")
         return custom_feature
 
     except Exception as e:
@@ -766,10 +766,21 @@ def get_feature_parameters(custom_feature):
         return 0, 10.0, 0.1
 
 
-def compute_join_sheets_feature(args):
+def compute_join_sheets_feature(args: adsk.fusion.CustomFeatureEventArgs):
     """Compute handler for the Join Sheets custom feature"""
     try:
         custom_feature = args.customFeature
+
+        # For FINDING features, use the custom feature's own collection.
+        owned_features = custom_feature.features
+
+        # For CREATING features, use the parent component's collection.
+        # This is the robust pattern that avoids the 'BaseVector' error.
+        parent_comp = custom_feature.parentComponent
+        if not parent_comp:
+            raise Exception("Could not get parent component from custom feature.")
+        comp_features = parent_comp.features
+
         futil.log(f"=== COMPUTE HANDLER CALLED ===")
         futil.log(f"Computing Join Sheets feature: {custom_feature.name}")
 
@@ -823,12 +834,78 @@ def compute_join_sheets_feature(args):
             futil.log(f"Valid intersection found: {intersection_info['description']}")
             futil.log(f"Intersection volume: {intersection_body.volume*1000:.2f} cm³")
             
-            # TODO: Create persistent geometry for final joinery result
-            # TODO: Slice intersection body into segments for alternating tabs/slots  
-            # TODO: Create tabs on one body and slots on the other using boolean operations
-            # TODO: Apply tolerance adjustments and material-aware sizing
+            # --- Parametric Geometry Creation (Slots on Body 0) ---
+            # This implements the "one sketch, one extrude" pattern.
+
+            # 1. Define unique names for our managed features.
+            slot_sketch_name = f"{custom_feature.name}_Body0_SlotsSketch"
+            slot_extrude_name = f"{custom_feature.name}_Body0_SlotsCut"
+
+            # 2. Find or create the single Sketch for all slots.
+            slot_sketch = owned_features.sketches.itemByName(slot_sketch_name)
+
+            if not slot_sketch:
+                futil.log(f"Creating new sketch: {slot_sketch_name}")
+                # Placeholder: A robust implementation needs to find the correct face
+                # and create a plane that aligns with the intersection geometry.
+                plane_for_sketch = bodies[0].faces[0]
+                slot_sketch = comp_features.sketches.add(plane_for_sketch)
+                slot_sketch.name = slot_sketch_name
+            else:
+                futil.log(f"Found existing sketch: {slot_sketch_name}. Clearing to redraw.")
+                # This is much faster than deleting/recreating the sketch feature itself.
+                while slot_sketch.sketchCurves.count > 0:
+                    slot_sketch.sketchCurves.item(0).deleteMe()
+
+            # 3. Dynamically draw the required number of slot profiles.
+            # This logic is a placeholder to demonstrate the pattern.
+            dims = intersection_info['dimensions']
+            sorted_dims = sorted([dims['width'], dims['height'], dims['depth']], reverse=True)
+            intersection_length = sorted_dims[0]
+            intersection_depth = sorted_dims[1]
             
-            futil.log("Temporary intersection analysis completed successfully")
+            num_tabs = int(intersection_length / (tab_width * 2))
+            if num_tabs < 1:
+                num_tabs = 1
+
+            slot_width = tab_width - (tolerance / 2.0)
+            space_width = tab_width + (tolerance / 2.0)
+            total_joint_length = (num_tabs * slot_width) + ((num_tabs - 1) * space_width)
+            start_offset = (intersection_length - total_joint_length) / 2.0
+
+            for i in range(num_tabs):
+                x1 = start_offset + i * (slot_width + space_width)
+                p1 = adsk.core.Point3D.create(x1, 0, 0)
+                p2 = adsk.core.Point3D.create(x1 + slot_width, intersection_depth, 0)
+                slot_sketch.sketchCurves.sketchLines.addTwoPointRectangle(p1, p2)
+
+            # 4. Find or create the single Extrude feature that consumes ALL profiles.
+            slot_extrude = owned_features.extrudeFeatures.itemByName(slot_extrude_name)
+            profiles_collection = slot_sketch.profiles
+
+            if profiles_collection.count == 0:
+                futil.log("WARNING: Sketch created but no profiles found. Cannot extrude.")
+                if slot_extrude:
+                    slot_extrude.deleteMe()
+            elif not slot_extrude:
+                futil.log(f"Creating new extrude: {slot_extrude_name}")
+                extrude_input = comp_features.extrudeFeatures.createInput(profiles_collection, adsk.fusion.FeatureOperations.CutFeatureOperation)
+                
+                cut_distance = get_sheet_metal_thickness(bodies[0])
+                distance = adsk.core.ValueInput.createByReal(cut_distance)
+                extrude_input.setDistanceExtent(False, distance)
+                extrude_input.participantBodies = [bodies[0]]
+                
+                slot_extrude = comp_features.extrudeFeatures.add(extrude_input)
+                slot_extrude.name = slot_extrude_name
+            else:
+                futil.log(f"Modifying existing extrude: {slot_extrude_name}")
+                slot_extrude.profile = profiles_collection
+                slot_extrude.extentOne.distance.value = get_sheet_metal_thickness(bodies[0])
+
+            # TODO: Implement corresponding tabs on bodies[1] using a Join operation.
+            # This would involve a second sketch and extrude feature managed by this custom feature.
+            futil.log("Parametric geometry computation completed successfully.")
             args.isComputed = True
         else:
             futil.log("ERROR: Need at least 2 bodies to generate joints")
