@@ -39,18 +39,21 @@ The Fusion 360 Sheet Goods Joinery Add-in implements a dual-workspace architectu
 
 Implements Fusion's Custom Features API to create parametric timeline integration.
 
-```python
-class SheetJoineryFeature(adsk.fusion.CustomFeature):
-    def __init__(self):
-        self.intersection_detector = IntersectionDetector()
-        self.joint_generator = JointGenerator()
-        self.metadata_manager = MetadataManager()
-    
-    def compute(self, args):
-        # Called automatically when upstream geometry changes
-        intersections = self.intersection_detector.find_all()
-        joints = self.joint_generator.create_joints(intersections)
-        self.metadata_manager.tag_faces(joints)
+```pseudocode
+function compute(changes):
+    // 1. Analyze input bodies to find intersections
+    intersections = intersection_detector.find(dependencies)
+
+    // 2. Find or create the single Sketch and Extrude features we manage
+    sketch = find_or_create_sketch("SlotSketch")
+    extrude = find_or_create_extrude("SlotExtrude", sketch)
+
+    // 3. Clear and redraw all slot profiles in the single sketch
+    joint_generator.update_sketch_profiles(sketch, intersections)
+
+    // 4. The extrude feature automatically updates.
+    //    We just update its parameters if needed.
+    extrude.depth = get_material_thickness()
 ```
 
 **Responsibilities**:
